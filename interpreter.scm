@@ -4,7 +4,7 @@
 
 (define interpret
   (lambda (filename)
-    (evaluate (parser filename) '(('return) ('null)) )))
+    (evaluate (parser filename) '((return) (null)) )))
 
 ;evaluate
 (define evaluate
@@ -19,7 +19,7 @@
   (lambda (statement state)
     (cond 
       ((eq? (car statement) 'return) (insert 'return (Mvalue (operand1) state)))
-      ((eq? (car statement) 'if) (Mstate-if (car statement) state))
+      ((eq? (car statement) 'if) (Mstate-if statement state))
       ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
       ((eq? (car statement) 'var) (Mstate-var statement state))
       ((eq? (car statement) '=) (Mstate-assignment statement state))
@@ -35,21 +35,21 @@
 
 (define parse-while-statement caddr)
 
-; Mstate-if handles if statementes
+; Mstate-if handles if statements
 ; TODO: How to handle else clause?
 (define Mstate-if
   (lambda (statement state)
     (cond
       ((Mbool (cadr statement) state) (Mstate (cddr statement) state))
-      ((not (null? (cddr statement))) (Mstate (cdddr statement) state))
+      ((not (null? (cddr statement))) (Mstate (caddr statement) state))
     (else statement))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state)
     (if (Mbool condition state)
-        (Mstate-while condition statement (Mstate statement state)))
-    (else state)))
+      (Mstate-while condition statement (Mstate statement state)))
+      state))
 
 ; MState-eq handles variable declaration
 (define Mstate-var
@@ -78,11 +78,11 @@
     (cond
       ((number? statement) statement)
       ((not (list? statement)) (lookup statement state))
-      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
-      ((eq? (operator statement) '-) (- (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
-      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
-      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
-      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
+      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) '-) (- (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       (else (error 'invalidInput "Expression cannot be evaluated to a value")))))
 
 ; Evaluate a statement for a truth value of #t or #f. 
