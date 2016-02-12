@@ -35,7 +35,6 @@
 
 (define parse-while-statement caddr)
 
-; Mstate-if handles if statements
 ; TODO: How to handle else clause?
 (define Mstate-if
   (lambda (statement state)
