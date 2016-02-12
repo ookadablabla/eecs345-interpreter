@@ -14,29 +14,51 @@
   (lambda (statement state)
     (cond 
       ((eq? (car statement) 'if) (Mstate-if statement state))
-      ((eq? (car statement) 'while) (Mstate-while statement state))
+      ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
       ((eq? (car statement) 'var) (Mstate-var statement state))
+      ((eq? (car statement) '=) (Mstate-assignment statement statement))
+      ; todo: handle return statements
     )))
 
-(define Mstate-if)
+; returns the condition from an "if" statement
+(define parse-if-condition
+  (lambda (if-statement)
+    ()))
+
+; returns the statement from an "if" statement
+(define parse-if-statement
+  (lambda (if-statement)
+    ))
+
+(define parse-if-else
+  (lambda (if-statement)))
+
+; (parse-while-statement '(while (condition) (statement))) returns condition
+(define parse-while-condition
+  (lambda (while-statement)
+    (cadr while-statement)))
+
+; (parse-while-statement '(while (condition) (statement))) returns statement
+(define parse-while-statement
+  (lambda (while-statement)
+    (caddr while-statement)))
+
+(define Mstate-if
+  (lambda (condition statement state)
+    ))
 
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state)
     (if (Mbool condition state)
-        (Mstate-while condition statement (Mstate-statement statement state)))
+        (Mstate-while condition statement (Mstate statement state)))
     (else state)))
 
 ; MState-eq handles variable declaration
 (define Mstate-var)
 
-; Mstate-statement takes a statement and the current state, evaluates the 
-; statement, and modifies the state as appropriate based on the contents of
-; the statement
-(define Mstate-statement)
-
 ; Mstate-eq handles variable assignment
-(define Mstate-eq)
+(define Mstate-assignment)
 
 ; MVALUE AND HELPERS
 (define Mvalue
