@@ -4,11 +4,11 @@
 
 (define interpret
   (lambda (filename)
-    -1
+    (Mevaluate (parser filename) '())
   	; Feed file into parser
   	; Evaluate the parse tree returned by parser
   	; Return the appropriate value
-  )
+  ))
 
 ; MSTATE AND HELPERS
 (define Mstate
@@ -18,9 +18,20 @@
       ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
       ((eq? (car statement) 'var) (Mstate-var statement state))
       ((eq? (car statement) '=) (Mstate-assignment statement statement))
-      (else (error 'unknown "Encountered an unknown statement"))
-      ; todo: handle return statements
-    )))
+      (else (error 'unknown "Encountered an unknown statement")))))
+
+;Mevaluate
+(define Mevaluate
+  (lambda (statement state)
+    (cond
+      ((eq? (action statement) 'return) (Mvalue expression statement))
+      (else (Mevaluate  (cdr statement) (Mstate statement state))))))
+
+;action
+(define action caar)
+
+;the expression being returned
+(define expression cdar)  
 
 ; returns the condition from an "if" statement
 (define parse-if-condition
@@ -48,6 +59,8 @@
   (lambda (while-statement)
     (caddr while-statement)))
 
+;(define parse-while-statement caddr)
+
 ; Mstate-if handles if statementes
 ; TODO: How to handle else clause?
 (define Mstate-if
@@ -63,22 +76,38 @@
     (else state)))
 
 ; MState-eq handles variable declaration
-(define Mstate-var -1)
+(define Mstate-var
+  (lambda (statement state)
+    (cond
+      ((null? (thirdElement statement)) (insert (variable statement) 'undefined))
+      (else (insert (variable statement) (Mvalue (operation statement) state) (remove (variable statement)))))))
 
 ; Mstate-assignment handles variable assignment
-(define Mstate-assignment -1)
+(define Mstate-assignment
+  (lambda (statement state)
+    (insert (variable statement) (Mvalue (operation statement) state) (remove (variable statement) state))))
+
+;variable
+(define variable cadr)
+
+;third element
+(define thirdElement cddr)
+
+;operation
+(define opperation caddr)
 
 ; MVALUE AND HELPERS
 (define Mvalue
-  (lambda (l)
+  (lambda (l state)
     (cond
       ((number? l) l)
-      ((eq? (operator l) '+) (+ (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '-) (- (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '*) (* (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '/) (quotient (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '%) (remainder (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      (else (error 'unknown "unknown expression"))))) ;it should never get here
+      ((eq? (operator l) '+) (+ (Mvalue (operand1 l) state) (Mvalue (operand2 l) state)))
+      ((eq? (operator l) '-) (- (Mvalue (operand1 l) state) (Mvalue (operand2 l) state)))
+      ((eq? (operator l) '*) (* (Mvalue (operand1 l) state) (Mvalue (operand2 l) state)))
+      ((eq? (operator l) '/) (quotient (Mvalue (operand1 l) state) (Mvalue (operand2 l) state)))
+      ((eq? (operator l) '%) (remainder (Mvalue (operand1 l) state) (Mvalue (operand2 l) state)))
+      ((eq? (lookup (car l)) 'undefined) (error 'undefined "the variable is not defined"))
+      (else (lookup (car l))))))
 
 ; Evaluate a statement for a truth value of #t or #f. 
 (define Mbool
@@ -106,7 +135,7 @@
 (define lookup
   (lambda (var state)
     (cond
-      ((null? (variables state)) 'error)
+      ((null? (variables state)) (error 'unkown "that variable does not exist"))
       ((eq? (variable1 state) var) (valueOfVar1 state))
       (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
 
