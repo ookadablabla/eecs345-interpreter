@@ -14,10 +14,11 @@
 (define Mstate
   (lambda (statement state)
     (cond 
-      ((eq? (car statement) 'if) (Mstate-if statement state))
+      ((eq? (car statement) 'if) (Mstate-if condition statement state)) ; how to handle else?
       ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
       ((eq? (car statement) 'var) (Mstate-var statement state))
       ((eq? (car statement) '=) (Mstate-assignment statement statement))
+      (else (error 'unknown "Encountered an unknown statement"))
       ; todo: handle return statements
     )))
 
@@ -47,9 +48,12 @@
   (lambda (while-statement)
     (caddr while-statement)))
 
+; Mstate-if handles if statementes
+; TODO: How to handle else clause?
 (define Mstate-if
   (lambda (condition statement state)
-    -1))
+    (if (Mbool condition state)
+      (Mstate statement state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
@@ -76,8 +80,14 @@
       ((eq? (operator l) '%) (remainder (Mvalue (operand1 l)) (Mvalue (operand2 l))))
       (else (error 'unknown "unknown expression"))))) ;it should never get here
 
+; Evaluate a statement for a truth value of #t or #f. 
 (define Mbool
-  (lambda (statement state) (
+  (lambda (statement state)
+    (cond 
+      ((eq? statement 'true) #t)
+      ((eq? statement 'false) #f)
+      ((list? statement) (Mstate statement state)) ; Is this right? 
+      (else (error 'conditionInvalid "Could not evaluate condition"))
     )))
 
 ; HELPER METHODS
