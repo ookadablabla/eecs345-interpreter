@@ -21,7 +21,7 @@
   (lambda (statement state)
     (cond
       ((eq? (action statement) 'return) (Mvalue expression statement))
-      (else (Mevaluate  (cdr statement) (Mstate statement state))))))
+      (else (Mevaluate (cdr statement) (Mstate statement state))))))
 
 ;action
 (define action caar)
@@ -43,17 +43,9 @@
   (lambda (if-statement)
     -1))
 
-; (parse-while-statement '(while (condition) (statement))) returns condition
-(define parse-while-condition
-  (lambda (while-statement)
-    (cadr while-statement)))
+(define parse-while-condition cadr)
 
-; (parse-while-statement '(while (condition) (statement))) returns statement
-(define parse-while-statement
-  (lambda (while-statement)
-    (caddr while-statement)))
-
-;(define parse-while-statement caddr)
+(define parse-while-statement caddr)
 
 ; Mstate-if handles if statementes
 ; TODO: How to handle else clause?
