@@ -4,44 +4,30 @@
 
 (define interpret
   (lambda (filename)
-    (Mevaluate (parser filename) '())))
-
-; MSTATE AND HELPERS
-(define Mstate
-  (lambda (statement state)
-    (cond 
-      ((eq? (car statement) 'if) (Mstate-if condition statement state)) ; how to handle else?
-      ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
-      ((eq? (car statement) 'var) (Mstate-var statement state))
-      ((eq? (car statement) '=) (Mstate-assignment statement statement))
-      (else (error 'unknown "Encountered an unknown statement")))))
+    (Mevaluate (parser filename) '(('return) ('null)) )))
 
 ;Mevaluate
 (define Mevaluate ; rename to 'evaluate'? 
   (lambda (statement state)
     (cond
-      ((eq? (action statement) 'return) (Mvalue expression statement))
-      (else (Mevaluate (cdr statement) (Mstate statement state))))))
+      ((eq? (action statement) 'return) (Mvalue (expression statement) state))
+      (else (Mevaluate (cdr statement) (Mstate (car statement) state))))))
+
+; MSTATE AND HELPERS
+(define Mstate
+  (lambda (statement state)
+    (cond 
+      ((eq? (car statement) 'if) (Mstate-if (car statement) state))
+      ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
+      ((eq? (car statement) 'var) (Mstate-var statement state))
+      ((eq? (car statement) '=) (Mstate-assignment statement state))
+      (else (error 'unknown "Encountered an unknown statement")))))
 
 ;action
 (define action caar)
 
 ;the expression being returned
 (define expression cdar)  
-
-; returns the condition from an "if" statement
-(define parse-if-condition
-  (lambda (if-statement)
-    -1))
-
-; returns the statement from an "if" statement
-(define parse-if-statement
-  (lambda (if-statement)
-    -1))
-
-(define parse-if-else
-  (lambda (if-statement)
-    -1))
 
 (define parse-while-condition cadr)
 
@@ -50,9 +36,11 @@
 ; Mstate-if handles if statementes
 ; TODO: How to handle else clause?
 (define Mstate-if
-  (lambda (condition statement state)
-    (if (Mbool condition state)
-      (Mstate statement state))))
+  (lambda (statement state)
+    (cond
+      ((Mbool (cadr statement) state) (Mstate (cddr statement) state))
+      ((not (null? (cddr statement))) (Mstate (cdddr statement) state))
+    (else statement))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
@@ -65,13 +53,13 @@
 (define Mstate-var
   (lambda (statement state)
     (cond
-      ((null? (thirdElement statement)) (insert (variable statement) 'undefined))
-      (else (insert (variable statement) (Mvalue (operation statement) state) (remove (variable statement)))))))
+      ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
+      (else (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))))
 
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
-    (insert (variable statement) (Mvalue (operation statement) state) (remove (variable statement) state))))
+    (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))
 
 ;variable
 (define variable cadr)
@@ -87,31 +75,29 @@
   (lambda (statement state)
     (cond
       ((number? statement) statement)
-      ((eq? statement 'true) #t)
-      ((eq? statement 'false) #f)
+      ((not (list? statement)) (lookup statement state))
       ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
       ((eq? (operator statement) '-) (- (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
       ((eq? (operator statement) '*) (* (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
-      ((eq? (lookup (car statement)) 'undefined) (error 'undefined "the variable is not defined"))
-      (else (lookup (car statement))))))
+      (else (error 'invalidInput "Expression cannot be evaluated to a value")))))
 
 ; Evaluate a statement for a truth value of #t or #f. 
 (define Mbool
   (lambda (statement state)
     (cond 
-      ((eq? statement 'true) #t)
-      ((eq? statement 'false) #f)
+      ((eq? statement 'true) 'true)
+      ((eq? statement 'false) 'false)
       ((eq? (car statement) '>) (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '<) (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '>=) (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '<=) (<= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '==) (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '!=) (not (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))))
-      ((eq? (comparator statement) '&&) (and (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '||) (or (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '!) (not (Mvalue (operand1 statement) state))) ; almost definitely wrong
+      ((eq? (comparator statement) '&&) (eq? 'true (and (Mbool (operand1 statement) state) (Mbool (operand2 statement) state))))
+      ((eq? (comparator statement) '||) (eq? 'true (or (Mbool (operand1 statement) state) (Mbool (operand2 statement) state))))
+      ((eq? (comparator statement) '!) (eq? 'true (not (Mbool (operand1 statement) state))))
       (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
 
 ; HELPER METHODS
@@ -133,7 +119,7 @@
 (define lookup
   (lambda (var state)
     (cond
-      ((null? (variables state)) (error 'unkown "that variable does not exist"))
+      ((null? (variables state)) (error 'unknown "that variable does not exist"))
       ((eq? (variable1 state) var) (valueOfVar1 state))
       (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
 
