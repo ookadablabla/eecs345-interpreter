@@ -4,19 +4,21 @@
 
 (define interpret
   (lambda (filename)
-    (Mevaluate (parser filename) '(('return) ('null)) )))
+    (evaluate (parser filename) '(('return) ('null)) )))
 
-;Mevaluate
-(define Mevaluate ; rename to 'evaluate'? 
+;evaluate
+(define evaluate
   (lambda (statement state)
     (cond
+      ((null? statement) (lookup 'return state))
       ((eq? (action statement) 'return) (Mvalue (expression statement) state))
-      (else (Mevaluate (cdr statement) (Mstate (car statement) state))))))
+      (else (evaluate (cdr statement) (Mstate (car statement) state))))))
 
 ; MSTATE AND HELPERS
 (define Mstate
   (lambda (statement state)
     (cond 
+      ((eq? (car statement) 'return) (insert 'return (Mvalue (operand1) state)))
       ((eq? (car statement) 'if) (Mstate-if (car statement) state))
       ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
       ((eq? (car statement) 'var) (Mstate-var statement state))
