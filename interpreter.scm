@@ -11,18 +11,24 @@
   (lambda (statement state)
     (cond
       ((null? statement) (lookup 'return state))
-      ((eq? (action statement) 'return) (lookup 'return (Mstate (car statement) (remove_var 'return state))))
-      (else (evaluate (cdr statement) (Mstate (car statement) state))))))
+      ((eq? (action statement) 'return) (lookup 'return (Mstate (firstExpression statement) (remove_var 'return state))))
+      (else (evaluate (resOfExpressions statement) (Mstate (firstExpression statement) state))))))
+
+;the expression in the stat of the program
+(define firstExpression car)
+
+;the rest of the expressions in the programs
+(define resOfExpressions cdr)
 
 ; MSTATE AND HELPERS
 (define Mstate
   (lambda (statement state)
     (cond 
-      ((eq? (car statement) 'return) (insert 'return (Mvalue (operand1 statement) state) (remove_var 'return state)))
-      ((eq? (car statement) 'if) (Mstate-if statement state))
-      ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
-      ((eq? (car statement) 'var) (Mstate-var statement state))
-      ((eq? (car statement) '=) (Mstate-assignment statement state))
+      ((eq? (operator statement) 'return) (insert 'return (Mvalue (operand1 statement) state) (remove_var 'return state)))
+      ((eq? (operator statement) 'if) (Mstate-if statement state))
+      ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
+      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) '=) (Mstate-assignment statement state))
       (else (error 'unknown "Encountered an unknown statement")))))
 
 ;action
@@ -35,13 +41,21 @@
 
 (define parse-while-statement caddr)
 
-; TODO: How to handle else clause?
+;How to handle else clause?
 (define Mstate-if
   (lambda (statement state)
     (cond
-      ((Mbool (cadr statement) state) (Mstate (caddr statement) state))
-      ((not (null? (cddr statement))) (Mstate (cadddr statement) state))
+      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state))
     (else statement))))
+
+(define else-statement-exists cddr)
+
+(define if-condition cadr)
+
+(define if-statement caddr)
+
+(define else-statement cadddr)
 
 ; Mstate-while handles while loops
 (define Mstate-while
