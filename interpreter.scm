@@ -4,11 +4,7 @@
 
 (define interpret
   (lambda (filename)
-    (Mevaluate (parser filename) '())
-  	; Feed file into parser
-  	; Evaluate the parse tree returned by parser
-  	; Return the appropriate value
-  ))
+    (Mevaluate (parser filename) '())))
 
 ; MSTATE AND HELPERS
 (define Mstate
@@ -21,7 +17,7 @@
       (else (error 'unknown "Encountered an unknown statement")))))
 
 ;Mevaluate
-(define Mevaluate
+(define Mevaluate ; rename to 'evaluate'? 
   (lambda (statement state)
     (cond
       ((eq? (action statement) 'return) (Mvalue expression statement))
@@ -41,13 +37,11 @@
 ; returns the statement from an "if" statement
 (define parse-if-statement
   (lambda (if-statement)
-    -1
-    ))
+    -1))
 
 (define parse-if-else
   (lambda (if-statement)
-    -1
-    ))
+    -1))
 
 ; (parse-while-statement '(while (condition) (statement))) returns condition
 (define parse-while-condition
@@ -94,7 +88,7 @@
 (define thirdElement cddr)
 
 ;operation
-(define opperation caddr)
+(define operation caddr)
 
 ; MVALUE AND HELPERS
 (define Mvalue
@@ -126,8 +120,7 @@
       ((eq? (comparator statement) '&&) (and (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '||) (or (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (comparator statement) '!) (not (Mvalue (operand1 statement) state))) ; almost definitely wrong
-      (else (error 'invalidInput "This expression cannot be evaluated to a boolean value"))
-    )))
+      (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
 
 ; HELPER METHODS
 
@@ -175,13 +168,13 @@
 ;variables in the state
 (define variables car)
 
-;gets the first variabble in the state
+;gets the first variable in the state
 (define variable1 caar)
 
 ;gets the value associated with the first variable in the state
 (define valueOfVar1 caadr)
 
-;rest of the varaibles in the state
+;rest of the variables in the state
 (define restOfVars cdar)
 
 ;rest of the values in the state
