@@ -8,7 +8,7 @@
   	; Feed file into parser
   	; Evaluate the parse tree returned by parser
   	; Return the appropriate value
-  )
+  ))
 
 ; MSTATE AND HELPERS
 (define Mstate
@@ -70,14 +70,16 @@
 
 ; MVALUE AND HELPERS
 (define Mvalue
-  (lambda (l)
+  (lambda (statement state)
     (cond
-      ((number? l) l)
-      ((eq? (operator l) '+) (+ (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '-) (- (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '*) (* (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '/) (quotient (Mvalue (operand1 l)) (Mvalue (operand2 l))))
-      ((eq? (operator l) '%) (remainder (Mvalue (operand1 l)) (Mvalue (operand2 l))))
+      ((number? statement) statement)
+      ((eq? statement 'true) #t)
+      ((eq? statement 'false) #f)
+      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
+      ((eq? (operator statement) '-) (- (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
+      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
+      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
+      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement)) (Mvalue (operand2 statement))))
       (else (error 'unknown "unknown expression"))))) ;it should never get here
 
 ; Evaluate a statement for a truth value of #t or #f. 
@@ -86,11 +88,22 @@
     (cond 
       ((eq? statement 'true) #t)
       ((eq? statement 'false) #f)
-      ((list? statement) (Mstate statement state)) ; Is this right? 
-      (else (error 'conditionInvalid "Could not evaluate condition"))
+      ((eq? (car statement) '>) (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '<) (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '>=) (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '<=) (<= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '==) (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '!=) (not (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))))
+      ((eq? (comparator statement) '&&) (and (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '||) (or (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (comparator statement) '!) (not (Mvalue (operand1 statement) state))) ; almost definitely wrong
+      (else (error 'invalidInput "This expression cannot be evaluated to a boolean value"))
     )))
 
 ; HELPER METHODS
+
+; comparator
+(define comparator car)
 
 ;operator
 (define operator car)
