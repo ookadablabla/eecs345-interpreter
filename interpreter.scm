@@ -4,6 +4,7 @@
 
 (define interpret
   (lambda (filename)
+    -1
   	; Feed file into parser
   	; Evaluate the parse tree returned by parser
   	; Return the appropriate value
@@ -23,15 +24,18 @@
 ; returns the condition from an "if" statement
 (define parse-if-condition
   (lambda (if-statement)
-    ()))
+    -1))
 
 ; returns the statement from an "if" statement
 (define parse-if-statement
   (lambda (if-statement)
+    -1
     ))
 
 (define parse-if-else
-  (lambda (if-statement)))
+  (lambda (if-statement)
+    -1
+    ))
 
 ; (parse-while-statement '(while (condition) (statement))) returns condition
 (define parse-while-condition
@@ -45,7 +49,7 @@
 
 (define Mstate-if
   (lambda (condition statement state)
-    ))
+    -1))
 
 ; Mstate-while handles while loops
 (define Mstate-while
@@ -55,10 +59,10 @@
     (else state)))
 
 ; MState-eq handles variable declaration
-(define Mstate-var)
+(define Mstate-var -1)
 
 ; Mstate-eq handles variable assignment
-(define Mstate-assignment)
+(define Mstate-assignment -1)
 
 ; MVALUE AND HELPERS
 (define Mvalue
@@ -73,7 +77,7 @@
       (else (error 'unknown "unknown expression"))))) ;it should never get here
 
 (define Mbool
-  (lambda (statement) (
+  (lambda (statement state) (
     )))
 
 ; HELPER METHODS
