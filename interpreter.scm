@@ -14,12 +14,6 @@
       ((eq? (action statement) 'return) (lookup 'return (Mstate (firstExpression statement) (remove_var 'return state))))
       (else (evaluate (resOfExpressions statement) (Mstate (firstExpression statement) state))))))
 
-;the expression in the stat of the program
-(define firstExpression car)
-
-;the rest of the expressions in the programs
-(define resOfExpressions cdr)
-
 ; MSTATE AND HELPERS
 (define Mstate
   (lambda (statement state)
@@ -31,16 +25,6 @@
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
       (else (error 'unknown "Encountered an unknown statement")))))
 
-;action
-(define action caar)
-
-;the expression being returned
-(define expression cdar)  
-
-(define parse-while-condition cadr)
-
-(define parse-while-statement caddr)
-
 ;How to handle else clause?
 (define Mstate-if
   (lambda (statement state)
@@ -48,14 +32,6 @@
       ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state))
     (else statement))))
-
-(define else-statement-exists cddr)
-
-(define if-condition cadr)
-
-(define if-statement caddr)
-
-(define else-statement cadddr)
 
 ; Mstate-while handles while loops
 (define Mstate-while
@@ -76,16 +52,7 @@
   (lambda (statement state)
     (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))
 
-;variable
-(define variable cadr)
-
-;third element
-(define thirdElement cddr)
-
-;operation
-(define operation caddr)
-
-; MVALUE AND HELPERS
+; Mvalue: Evaluate an expression to determine its value.
 (define Mvalue
   (lambda (statement state)
     (cond
@@ -98,7 +65,7 @@
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       (else (error 'invalidInput "Expression cannot be evaluated to a value")))))
 
-; Evaluate a statement for a truth value of #t or #f. 
+; Mbool: Evaluate a statement for a truth value of #t or #f. 
 (define Mbool
   (lambda (statement state)
     (cond 
@@ -116,18 +83,6 @@
       (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
 
 ; HELPER METHODS
-
-; comparator
-(define comparator car)
-
-;operator
-(define operator car)
-
-;operand1
-(define operand1 cadr)
-
-;operand2
-(define operand2 caddr)
 
 ;lookup gets the value for a given variable
 ;takes a variable name and the state and returns the value of that variable
@@ -156,7 +111,17 @@
       ((null? state) (cons (cons var '()) (cons (car (cons (cons value state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
 
-;helpers for lookup, remove, and insert
+; comparator
+(define comparator car)
+
+;operator
+(define operator car)
+
+;operand1
+(define operand1 cadr)
+
+;operand2
+(define operand2 caddr)
 
 ;variables in the state
 (define variables car)
@@ -175,3 +140,36 @@
 
 ;get the values in the state
 (define allValues cadr)
+
+;the expression in the stat of the program
+(define firstExpression car)
+
+;the rest of the expressions in the programs
+(define resOfExpressions cdr)
+
+;action
+(define action caar)
+
+;the expression being returned
+(define expression cdar)  
+
+(define parse-while-condition cadr)
+
+(define parse-while-statement caddr)
+
+(define else-statement-exists cddr)
+
+(define if-condition cadr)
+
+(define if-statement caddr)
+
+(define else-statement cadddr)
+
+;variable
+(define variable cadr)
+
+;third element
+(define thirdElement cddr)
+
+;operation
+(define operation caddr)
