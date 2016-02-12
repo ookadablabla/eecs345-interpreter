@@ -11,7 +11,7 @@
   (lambda (statement state)
     (cond
       ((null? statement) (lookup 'return state))
-      ((eq? (action statement) 'return) (Mvalue (expression statement) state))
+      ((eq? (action statement) 'return) (lookup 'return (Mstate (car statement) (remove_var 'return state))))
       (else (evaluate (cdr statement) (Mstate (car statement) state))))))
 
 ; MSTATE AND HELPERS
