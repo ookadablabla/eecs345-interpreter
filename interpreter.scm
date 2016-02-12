@@ -18,7 +18,7 @@
 (define Mstate
   (lambda (statement state)
     (cond 
-      ((eq? (car statement) 'return) (insert 'return (Mvalue (operand1) state)))
+      ((eq? (car statement) 'return) (insert 'return (Mvalue (operand1 statement) state) (remove_var 'return state)))
       ((eq? (car statement) 'if) (Mstate-if statement state))
       ((eq? (car statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
       ((eq? (car statement) 'var) (Mstate-var statement state))
@@ -39,8 +39,8 @@
 (define Mstate-if
   (lambda (statement state)
     (cond
-      ((Mbool (cadr statement) state) (Mstate (cddr statement) state))
-      ((not (null? (cddr statement))) (Mstate (caddr statement) state))
+      ((Mbool (cadr statement) state) (Mstate (caddr statement) state))
+      ((not (null? (cddr statement))) (Mstate (cadddr statement) state))
     (else statement))))
 
 ; Mstate-while handles while loops
