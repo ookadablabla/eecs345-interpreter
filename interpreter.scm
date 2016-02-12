@@ -60,7 +60,7 @@
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state)
-    (if (Mbool condition state)
+    (if (and (Mbool condition state) (not (eq? (lookup 'return state) 'null)))
       (Mstate-while condition statement (Mstate statement state)))
       state))
 
@@ -175,6 +175,3 @@
 
 ;get the values in the state
 (define allValues cadr)
-      
-
-
