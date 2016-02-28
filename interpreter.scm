@@ -1,4 +1,4 @@
-; EECS 345 Class Project 1
+; EECS 345 Class Project 2
 ; James Hochadel and Andrew Marmorstein
 (load "simpleParser.scm")
 
@@ -15,29 +15,30 @@
 
 ; MSTATE AND HELPERS
 (define Mstate
-  (lambda (statement state return)
+  (lambda (statement state return break)
     (cond 
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return))
       ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
-      ((eq? (operator statement) 'var) (Mstate-var statement state)) ; no need to pass return?
-      ((eq? (operator statement) '=) (Mstate-assignment statement state)) ; no need to pass return?
+      ((eq? (operator statement) 'break) (break state))
+      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) '=) (Mstate-assignment statement state))
       (else (error 'unknown "Encountered an unknown statement")))))
 
 ; Mstate-if handles if statements
 (define Mstate-if
-  (lambda (statement state return)
+  (lambda (statement state return break)
     (cond
-      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state return))
-      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return))
+      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state return break))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break))
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
-  (lambda (condition statement state return)
-    (cond
-      ((and (eq? (Mbool condition state) 'true) (eq? (lookup 'return state) 'null)) (Mstate-while condition statement (Mstate statement state) return))
-      (else state))))
+  (lambda (condition statement state return break)
+    (if (and (eq? (Mbool condition state) 'true) (eq? (lookup 'return state) 'null))
+      (Mstate-while condition statement (Mstate statement state) return break))
+      state))
 
 ; MState-eq handles variable declaration
 (define Mstate-var
