@@ -2,16 +2,17 @@
 ; James Hochadel and Andrew Marmorstein
 (load "simpleParser.scm")
 
+; return, true, and false are reserved keywords
 (define interpret
   (lambda (filename)
-    (evaluate (parser filename) '((return) (null)) )))
+    (evaluate (parser filename) '((return true false) (null true false)) )))
 
 ;evaluate
 (define evaluate
   (lambda (statement state)
     (cond
       ((null? statement) (lookup 'return state))
-      ((eq? (action statement) 'return) (lookup 'return (Mstate (firstExpression statement) (remove_var 'return state))))
+      ((eq? (action statement) 'return) (Mvalue (cadar statement) state))
       (else (evaluate (resOfExpressions statement) (Mstate (firstExpression statement) state))))))
 
 ; MSTATE AND HELPERS
@@ -31,7 +32,7 @@
     (cond
       ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state))
-    (else statement))))
+    (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
@@ -59,11 +60,14 @@
       ((number? statement) statement)
       ((not (list? statement)) (lookup statement state))
       ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (operator statement) '-) (- (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) '-) (if (null? (cddr statement))
+                                         (- (Mvalue (operand1 statement) state)) ; unary "-"
+                                         (- (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))))
       ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      (else (error 'invalidInput "Expression cannot be evaluated to a value")))))
+      (else (Mbool statement state)))))
+      ;(else (error 'invalidInput "Expression cannot be evaluated to a value")))))
 
 ; Mbool: Evaluate a statement for a truth value of #t or #f. 
 (define Mbool
@@ -71,15 +75,15 @@
     (cond 
       ((eq? statement 'true) 'true)
       ((eq? statement 'false) 'false)
-      ((eq? (car statement) '>) (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '<) (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '>=) (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '<=) (<= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '==) (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (comparator statement) '!=) (not (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))))
-      ((eq? (comparator statement) '&&) (eq? 'true (and (Mbool (operand1 statement) state) (Mbool (operand2 statement) state))))
-      ((eq? (comparator statement) '||) (eq? 'true (or (Mbool (operand1 statement) state) (Mbool (operand2 statement) state))))
-      ((eq? (comparator statement) '!) (eq? 'true (not (Mbool (operand1 statement) state))))
+      ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
+      ((eq? (comparator statement) '<) (if (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
+      ((eq? (comparator statement) '>=) (if (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
+      ((eq? (comparator statement) '<=) (if (<= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
+      ((eq? (comparator statement) '==) (if (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
+      ((eq? (comparator statement) '!=) (if (not (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))) 'true 'false))
+      ((eq? (operator statement) '&&) (if (eq? #t (and (eq? 'true (Mbool (operand1 statement) state)) (eq? 'true (Mbool (operand2 statement) state)))) 'true 'false))
+      ((eq? (operator statement) '||) (if (eq? #t (or (eq? 'true (Mbool (operand1 statement) state)) (eq? 'true (Mbool (operand2 statement) state)))) 'true 'false))
+      ((eq? (operator statement) '!) (if (eq? #t (not (eq? 'true (Mbool (operand1 statement) state)))) 'true 'false))
       (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
 
 ; HELPER METHODS
@@ -157,7 +161,7 @@
 
 (define parse-while-statement caddr)
 
-(define else-statement-exists cddr)
+(define else-statement-exists cdddr)
 
 (define if-condition cadr)
 
