@@ -31,7 +31,7 @@
     (cond
       ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state))
-    (else state))))
+      (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
@@ -44,7 +44,7 @@
 (define Mstate-var
   (lambda (statement state)
     (cond
-      ((not (stateContains (variable statement) state)) (error 'redefining "you can not declare a variable that has already been declared"))
+      ((stateContains (variable statement) state) (error 'redefining "you can not declare a variable that has already been declared"))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
       (else (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))))
 
