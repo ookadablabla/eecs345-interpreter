@@ -123,6 +123,9 @@
   (lambda (var value state)
     (cond
       ((null? state) (cons (cons var '()) (cons (car (cons (cons value state) '())) '())))
+      ((null? (variables state)) state)
+      ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
+                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelVariables state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
 
 ;stateContains? checks if the variable has already been declared in the state
