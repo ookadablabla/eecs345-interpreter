@@ -109,6 +109,10 @@
   (lambda (var state)
     (cond
       ((null? (variables state)) state)
+      ((list? (outerLevelVariables state)) (cons (cons (variables (remove_var var (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
+                                                       (cons (variables (remove_var var (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '()))
+                                                 (cons (cons (valuesInState (remove_var var (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
+                                                       (cons (valuesInState (remove_var var (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '())) '())))
       ((eq? (variable1 state) var) (cons (restOfVars state) (cons (restOfValues state) '())))
       (else (cons (cons (variable1 state) (variables (remove_var var (cons (restOfVars state) (cons (restOfValues state) '())))))
                   (cons (cons (valueOfVar1 state) (allValues (remove_var var (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
@@ -158,6 +162,18 @@
 
 ;values in the state
 (define valuesInState cadr)
+
+;outerLevelVariables gets the variables in the outer most scope
+(define outerLevelVariables caar)
+
+;outerLevelValues gets the values in the outer most scope
+(define outerLevelValues caadr)
+
+;secondLevelVariables gets the variables in the outer most scope
+(define secondLevelVariables cadar)
+
+;secondLevelValues gets the values in the outer most scope
+(define secondLevelValues cadadr)
 
 ;gets the first variable in the state
 (define variable1 caar)
