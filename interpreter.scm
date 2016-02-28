@@ -36,9 +36,9 @@
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state)
-    (if (and (Mbool condition state) (not (eq? (lookup 'return state) 'null)))
-      (Mstate-while condition statement (Mstate statement state)))
-      state))
+    (cond
+      ((and (Mbool condition state) (eq? (lookup 'return state) 'null)) (Mstate-while condition statement (Mstate statement state)))
+      (else state))))
 
 ; MState-eq handles variable declaration
 (define Mstate-var
