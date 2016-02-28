@@ -94,6 +94,10 @@
 ;takes a variable name and the state and returns the value of that variable
 (define lookup
   (lambda (var state)
+    (lookup-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+
+(define lookup-flattened
+  (lambda (var state)
     (cond
       ((null? (variables state)) (error 'unknown "that variable does not exist"))
       ((eq? (variable1 state) var) (valueOfVar1 state))
@@ -120,10 +124,22 @@
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
   (lambda (var state)
+    (stateContains var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+
+(define stateContains-flattened
+  (lambda (var state)
     (cond 
       ((null? (variables state)) #f)
       ((eq? (variable1 state) var) #t)
       (else (stateContains var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+;flatten flattens out a list
+(define flatten
+  (lambda (l)
+    (cond
+      ((null? l) '())
+      ((list? (car l)) (append (flatten (car l)) (flatten (cdr l))))
+      (else (cons (car l) (flatten (cdr l)))))))
 
 ; comparator
 (define comparator car)
@@ -139,6 +155,9 @@
 
 ;variables in the state
 (define variables car)
+
+;values in the state
+(define valuesInState cadr)
 
 ;gets the first variable in the state
 (define variable1 caar)
