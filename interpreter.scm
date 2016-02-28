@@ -2,43 +2,41 @@
 ; James Hochadel and Andrew Marmorstein
 (load "simpleParser.scm")
 
-; return, true, and false are reserved keywords
+; Parse and evaluate the file.
 (define interpret
   (lambda (filename)
-    (evaluate (parser filename) '((return true false) (null true false)) )))
-
-;evaluate
-(define evaluate
-  (lambda (statement state)
-    (cond
-      ((null? statement) (lookup 'return state))
-      ((eq? (action statement) 'return) (Mvalue (cadar statement) state))
-      (else (evaluate (resOfExpressions statement) (Mstate (firstExpression statement) state))))))
+    (call/cc 
+      (lambda (return)
+        (letrec ((loop (lambda (statement state)
+                          (if (null? statement) 
+                            (return "Reached EOF without a return statement")
+                            (loop (resOfExpressions statement) (Mstate (firstExpression statement) state return))))))
+                (loop (parser filename) '((true false) (true false))))))))
 
 ; MSTATE AND HELPERS
 (define Mstate
-  (lambda (statement state)
+  (lambda (statement state return)
     (cond 
-      ((eq? (operator statement) 'return) (insert 'return (Mvalue (operand1 statement) state) (remove_var 'return state)))
-      ((eq? (operator statement) 'if) (Mstate-if statement state))
-      ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state))
-      ((eq? (operator statement) 'var) (Mstate-var statement state))
-      ((eq? (operator statement) '=) (Mstate-assignment statement state))
+      ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'if) (Mstate-if statement state return))
+      ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
+      ((eq? (operator statement) 'var) (Mstate-var statement state)) ; no need to pass return?
+      ((eq? (operator statement) '=) (Mstate-assignment statement state)) ; no need to pass return?
       (else (error 'unknown "Encountered an unknown statement")))))
 
-;How to handle else clause?
+; Mstate-if handles if statements
 (define Mstate-if
-  (lambda (statement state)
+  (lambda (statement state return)
     (cond
-      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state))
-      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state))
+      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state return))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return))
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
-  (lambda (condition statement state)
+  (lambda (condition statement state return)
     (cond
-      ((and (eq? (Mbool condition state) 'true) (eq? (lookup 'return state) 'null)) (Mstate-while condition statement (Mstate statement state)))
+      ((and (eq? (Mbool condition state) 'true) (eq? (lookup 'return state) 'null)) (Mstate-while condition statement (Mstate statement state) return))
       (else state))))
 
 ; MState-eq handles variable declaration
@@ -129,6 +127,9 @@
 
 ;operator
 (define operator car)
+
+; operand
+(define operand cadr)
 
 ;operand1
 (define operand1 cadr)
