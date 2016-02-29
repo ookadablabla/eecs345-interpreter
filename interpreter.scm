@@ -16,7 +16,8 @@
 ; MSTATE AND HELPERS
 (define Mstate
   (lambda (statement state return)
-    (cond 
+    (cond
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate (operand statement) (addLevelOfScope state) return)))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return))
       ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
@@ -145,6 +146,16 @@
       ((null? l) '())
       ((list? (car l)) (append (flatten (car l)) (flatten (cdr l))))
       (else (cons (car l) (flatten (cdr l)))))))
+
+;adds a level of scope to the given state
+(define addLevelOfScope
+  (lambda (state)
+    (cons (cons '() (cons (car state) '())) (cons (cons '() (cons (cadr state) '())) '()))))
+
+;remove the outer most level of scope
+(define getInnerScope
+  (lambda (state)
+    (cons (cadar state) (cons (cadadr state) '()))))
 
 ; comparator
 (define comparator car)
