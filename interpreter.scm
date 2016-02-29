@@ -45,12 +45,12 @@
     (cond
       ((stateContains (variable statement) state) (error 'redefining "you can not declare a variable that has already been declared"))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
-      (else (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))))
+      (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
-    (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))
+    (insert (variable statement) (Mvalue (operation statement) state) state)))
 
 ; Mvalue: Evaluate an expression to determine its value.
 (define Mvalue
@@ -102,25 +102,26 @@
 
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
-(define remove_var
-  (lambda (var state)
+(define replace_var
+  (lambda (var value state)
     (cond
       ((null? (variables state)) state)
-      ((list? (outerLevelVariables state)) (cons (cons (variables (remove_var var (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
-                                                       (cons (variables (remove_var var (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '()))
-                                                 (cons (cons (valuesInState (remove_var var (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
-                                                       (cons (valuesInState (remove_var var (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '())) '())))
-      ((eq? (variable1 state) var) (cons (restOfVars state) (cons (restOfValues state) '())))
-      (else (cons (cons (variable1 state) (variables (remove_var var (cons (restOfVars state) (cons (restOfValues state) '())))))
-                  (cons (cons (valueOfVar1 state) (allValues (remove_var var (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
+      ((list? (outerLevelVariables state)) (cons (cons (variables (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
+                                                       (cons (variables (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '()))
+                                                 (cons (cons (valuesInState (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
+                                                       (cons (valuesInState (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '())) '())))
+      ((eq? (variable1 state) var) (cons (cons (variable1 state) (restOfVars state)) (cons (cons value (restOfValues state)) '())))
+      (else (cons (cons (variable1 state) (variables (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '())))))
+                  (cons (cons (valueOfVar1 state) (allValues (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
 
-;insert inerts a variable into the state
+;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
 (define insert
   (lambda (var value state)
     (cond
       ((null? state) (cons (cons var '()) (cons (car (cons (cons value state) '())) '())))
       ((null? (variables state)) state)
+      ((stateContains var state) (replace_var var value state))
       ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
                                                  (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelVariables state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
@@ -128,7 +129,7 @@
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
   (lambda (var state)
-    (stateContains var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+    (stateContains-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
 
 (define stateContains-flattened
   (lambda (var state)
