@@ -6,11 +6,12 @@
 (define interpret
   (lambda (filename)
     (call/cc 
-      (lambda (return break) ; TODO: You're trying to figure out how to forbid BREAKs outside of while loops. Initial BREAK shoudl throw an error.
+      (lambda (return break) ; TODO: You're trying to figure out how to forbid BREAKs outside of while loops. Initial BREAK should throw an error.
         (letrec ((loop (lambda (statement state)
                           (if (null? statement) 
                             (return "Reached EOF without a return statement")
-                            (loop (resOfExpressions statement) (Mstate (firstExpression statement) state return (break (error 'invalidBreak "A break was found outside of a while loop"))))))))
+                            (loop (resOfExpressions statement) (Mstate (firstExpression statement) state return break)))))
+                (break-out (lambda (state))))
                 (loop (parser filename) '((true false) (true false))))))))
 
 ; Mstate modifies the state depending on the contents of statement.
@@ -20,7 +21,9 @@
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'while) 
-        (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return break))
+        (call/cc
+          (lambda (new-break)
+            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break))))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
