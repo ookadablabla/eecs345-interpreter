@@ -6,7 +6,7 @@
 (define interpret
   (lambda (filename)
     (call/cc 
-      (lambda (return) ; TODO: You're trying to figure out how to forbid BREAKs outside of while loops. Initial BREAK should throw an error.
+      (lambda (return)
         (letrec ((loop (lambda (statement state)
                           (if (null? statement) 
                             (return "Reached EOF without a return statement")
@@ -17,7 +17,7 @@
 (define Mstate
   (lambda (statement state return break)
     (cond
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return break)))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'while) 
@@ -30,10 +30,10 @@
       (else (error 'unknown "Encountered an unknown statement")))))
 
 (define Mstate-begin
-  (lambda (statement state return)
+  (lambda (statement state return break)
     (cond
       ((null? statement) state)
-      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return) return)))))
+      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break) return break)))))
 
 (define insideBraces cdr)
 
@@ -41,15 +41,15 @@
 (define Mstate-if
   (lambda (statement state return break)
     (cond
-      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state return break))
+      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break))
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state return break)
-    (if (and (eq? (Mbool condition state) 'true) (eq? (lookup 'return state) 'null))
-      (Mstate-while condition statement (Mstate statement state) return break))
+    (if (eq? (Mbool condition state) 'true)
+      (Mstate-while condition statement (Mstate statement state return break) return break))
       state))
 
 ; MState-eq handles variable declaration
@@ -79,7 +79,6 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       (else (Mbool statement state)))))
-      ;(else (error 'invalidInput "Expression cannot be evaluated to a value")))))
 
 ; Mbool: Evaluate a statement for a truth value of #t or #f. 
 (define Mbool
