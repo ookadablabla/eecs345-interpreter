@@ -16,8 +16,8 @@
 ; Mstate modifies the state depending on the contents of statement.
 (define Mstate
   (lambda (statement state return break)
-    (cond 
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate (operand statement) (addLevelOfScope state) return)))
+    (cond
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'while) 
@@ -28,6 +28,14 @@
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
       (else (error 'unknown "Encountered an unknown statement")))))
+
+(define Mstate-begin
+  (lambda (statement state return)
+    (cond
+      ((null? statement) state)
+      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return) return)))))
+
+(define insideBraces cdr)
 
 ; Mstate-if handles if statements
 (define Mstate-if
@@ -128,7 +136,7 @@
       ((null? (variables state)) state)
       ((stateContains var state) (replace_var var value state))
       ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
-                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelVariables state) '())) '())))
+                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelValues state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
 
 ;stateContains? checks if the variable has already been declared in the state
