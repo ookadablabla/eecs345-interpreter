@@ -17,16 +17,16 @@
 (define Mstate
   (lambda (statement state return break)
     (cond
+      ((eq? (operator statement) '=) (Mstate-assignment statement state))
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return break)))
-      ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
-      ((eq? (operator statement) 'while) 
+      ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
             (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break))))
-      ((eq? (operator statement) 'break) (break state))
-      ((eq? (operator statement) 'var) (Mstate-var statement state))
-      ((eq? (operator statement) '=) (Mstate-assignment statement state))
       (else (error 'unknown "Encountered an unknown statement")))))
 
 (define Mstate-begin
@@ -34,8 +34,6 @@
     (cond
       ((null? statement) state)
       (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break) return break)))))
-
-(define insideBraces cdr)
 
 ; Mstate-if handles if statements
 (define Mstate-if
@@ -248,3 +246,5 @@
 
 ;operation
 (define operation caddr)
+
+(define insideBraces cdr)
