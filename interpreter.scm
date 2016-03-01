@@ -18,7 +18,7 @@
   (lambda (statement state return)
     (cond
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
-      ((eq? (operator statement) 'try) (getInnerScope (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return)))
+      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return))
       ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
@@ -26,6 +26,7 @@
       ((eq? (operator statement) '=) (Mstate-assignment statement state)) ; no need to pass return?
       (else (error 'unknown "Encountered an unknown statement")))))
 
+;Helpers for sending information to Mstate-try
 (define try cadr)
 
 (define catch caddr)
@@ -45,8 +46,17 @@
   (lambda (catch fnally e state return)
     (cond
       ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
+      ((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally e state return))
       ((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally e (insert 'e e) return))
-      (else (Mstate-catch(restOfExpressions statement) finally e (Mstate (firstExpression catch) state return) return)))))
+      (else (Mstate-catch (restOfExpressions catch) finally e (Mstate (firstExpression catch) state return) return)))))
+
+;Mstate-finally handle finally block
+(define Mstate-finally
+  (lambda (finally state return)
+    (cond
+      ((null? finally) (getInnerScope state))
+      ((eq? (operator finally) 'finally) (Mstate-finally (restOfExpressions finally) state return))
+      (else (Mstate-finally (resteOfExpressions finally) (Mstate (firstExpression finally) state return) return)))))
 
 ; Mstate-begin handles begin statements
 (define Mstate-begin
