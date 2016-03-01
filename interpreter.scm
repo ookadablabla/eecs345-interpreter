@@ -10,20 +10,28 @@
         (letrec ((loop (lambda (statement state)
                           (if (null? statement) 
                             (return "Reached EOF without a return statement")
-                            (loop (resOfExpressions statement) (Mstate (firstExpression statement) state return))))))
+                            (loop (restOfExpressions statement) (Mstate (firstExpression statement) state return))))))
                 (loop (parser filename) '((true false) (true false))))))))
 
 ; MSTATE AND HELPERS
 (define Mstate
   (lambda (statement state return)
     (cond
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate (operand statement) (addLevelOfScope state) return)))
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return))
       ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
       ((eq? (operator statement) 'var) (Mstate-var statement state)) ; no need to pass return?
       ((eq? (operator statement) '=) (Mstate-assignment statement state)) ; no need to pass return?
       (else (error 'unknown "Encountered an unknown statement")))))
+
+(define Mstate-begin
+  (lambda (statement state return)
+    (cond
+      ((null? statement) state)
+      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return) return)))))
+
+(define insideBraces cdr)
 
 ; Mstate-if handles if statements
 (define Mstate-if
@@ -124,7 +132,7 @@
       ((null? (variables state)) state)
       ((stateContains var state) (replace_var var value state))
       ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
-                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelVariables state) '())) '())))
+                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelValues state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
 
 ;stateContains? checks if the variable has already been declared in the state
@@ -209,7 +217,7 @@
 (define firstExpression car)
 
 ;the rest of the expressions in the programs
-(define resOfExpressions cdr)
+(define restOfExpressions cdr)
 
 ;action
 (define action caar)
