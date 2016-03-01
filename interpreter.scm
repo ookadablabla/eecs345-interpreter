@@ -1,4 +1,4 @@
-; EECS 345 Class Project 1
+; EECS 345 Class Project 2
 ; James Hochadel and Andrew Marmorstein
 (load "simpleParser.scm")
 
@@ -6,24 +6,32 @@
 (define interpret
   (lambda (filename)
     (call/cc 
-      (lambda (return)
+      (lambda (return) ; TODO: You're trying to figure out how to forbid BREAKs outside of while loops. Initial BREAK should throw an error.
         (letrec ((loop (lambda (statement state)
                           (if (null? statement) 
                             (return "Reached EOF without a return statement")
-                            (loop (restOfExpressions statement) (Mstate (firstExpression statement) state return))))))
+                            (loop (restOfExpressions statement) (Mstate (firstExpression statement) state return (lambda (x) (error 'invalidBreak "Break was called outside of a while loop"))))))))
                 (loop (parser filename) '((true false) (true false))))))))
 
-; MSTATE AND HELPERS
+; Mstate modifies the state depending on the contents of statement.
 (define Mstate
-  (lambda (statement state return)
+  (lambda (statement state return break)
     (cond
+<<<<<<< HEAD
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
       ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
+=======
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return break)))
+>>>>>>> d8a1a853198cb3c48f091c51cf03e8e767cbf39f
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
-      ((eq? (operator statement) 'if) (Mstate-if statement state return))
-      ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
-      ((eq? (operator statement) 'var) (Mstate-var statement state)) ; no need to pass return?
-      ((eq? (operator statement) '=) (Mstate-assignment statement state)) ; no need to pass return?
+      ((eq? (operator statement) 'if) (Mstate-if statement state return break))
+      ((eq? (operator statement) 'while) 
+        (call/cc
+          (lambda (new-break)
+            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break))))
+      ((eq? (operator statement) 'break) (break state))
+      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) '=) (Mstate-assignment statement state))
       (else (error 'unknown "Encountered an unknown statement")))))
 
 ;Helpers for sending information to Mstate-try
@@ -62,25 +70,37 @@
 
 ; Mstate-begin handles begin statements
 (define Mstate-begin
-  (lambda (statement state return)
+  (lambda (statement state return break)
     (cond
       ((null? statement) state)
-      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return) return)))))
+      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break) return break)))))
 
 ; Mstate-if handles if statements
 (define Mstate-if
-  (lambda (statement state return)
+  (lambda (statement state return break)
     (cond
+<<<<<<< HEAD
       ((eq? (Mbool (if-condition statement) state) 'true) (Mstate (if-statement statement) state return))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return))
+=======
+      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break))
+>>>>>>> d8a1a853198cb3c48f091c51cf03e8e767cbf39f
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
+<<<<<<< HEAD
   (lambda (condition statement state return)
     (cond
       ((eq? (Mbool condition state) 'true) (Mstate-while condition statement (Mstate statement state return) return))
       (else state))))
+=======
+  (lambda (condition statement state return break)
+    (if (eq? (Mbool condition state) 'true)
+      (Mstate-while condition statement (Mstate statement state return break) return break))
+      state))
+>>>>>>> d8a1a853198cb3c48f091c51cf03e8e767cbf39f
 
 ; MState-var handles variable declaration
 (define Mstate-var
