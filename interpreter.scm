@@ -18,6 +18,7 @@
 (define Mstate
   (lambda (statement state return break)
     (cond 
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate (operand statement) (addLevelOfScope state) return)))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'while) 
@@ -50,12 +51,12 @@
     (cond
       ((stateContains (variable statement) state) (error 'redefining "you can not declare a variable that has already been declared"))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
-      (else (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))))
+      (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
-    (insert (variable statement) (Mvalue (operation statement) state) (remove_var (variable statement) state))))
+    (insert (variable statement) (Mvalue (operation statement) state) state)))
 
 ; Mvalue: Evaluate an expression to determine its value.
 (define Mvalue
@@ -96,6 +97,10 @@
 ;takes a variable name and the state and returns the value of that variable
 (define lookup
   (lambda (var state)
+    (lookup-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+
+(define lookup-flattened
+  (lambda (var state)
     (cond
       ((null? (variables state)) (error 'unknown "that variable does not exist"))
       ((eq? (variable1 state) var) (valueOfVar1 state))
@@ -103,29 +108,59 @@
 
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
-(define remove_var
-  (lambda (var state)
+(define replace_var
+  (lambda (var value state)
     (cond
       ((null? (variables state)) state)
-      ((eq? (variable1 state) var) (cons (restOfVars state) (cons (restOfValues state) '())))
-      (else (cons (cons (variable1 state) (variables (remove_var var (cons (restOfVars state) (cons (restOfValues state) '())))))
-                  (cons (cons (valueOfVar1 state) (allValues (remove_var var (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
+      ((list? (outerLevelVariables state)) (cons (cons (variables (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
+                                                       (cons (variables (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '()))
+                                                 (cons (cons (valuesInState (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
+                                                       (cons (valuesInState (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '())) '())))
+      ((eq? (variable1 state) var) (cons (cons (variable1 state) (restOfVars state)) (cons (cons value (restOfValues state)) '())))
+      (else (cons (cons (variable1 state) (variables (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '())))))
+                  (cons (cons (valueOfVar1 state) (allValues (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
 
-;insert inerts a variable into the state
+;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
 (define insert
   (lambda (var value state)
     (cond
       ((null? state) (cons (cons var '()) (cons (car (cons (cons value state) '())) '())))
+      ((null? (variables state)) state)
+      ((stateContains var state) (replace_var var value state))
+      ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
+                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelVariables state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
 
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
   (lambda (var state)
+    (stateContains-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+
+(define stateContains-flattened
+  (lambda (var state)
     (cond 
       ((null? (variables state)) #f)
       ((eq? (variable1 state) var) #t)
       (else (stateContains var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+;flatten flattens out a list
+(define flatten
+  (lambda (l)
+    (cond
+      ((null? l) '())
+      ((list? (car l)) (append (flatten (car l)) (flatten (cdr l))))
+      (else (cons (car l) (flatten (cdr l)))))))
+
+;adds a level of scope to the given state
+(define addLevelOfScope
+  (lambda (state)
+    (cons (cons '() (cons (car state) '())) (cons (cons '() (cons (cadr state) '())) '()))))
+
+;remove the outer most level of scope
+(define getInnerScope
+  (lambda (state)
+    (cons (cadar state) (cons (cadadr state) '()))))
 
 ; comparator
 (define comparator car)
@@ -144,6 +179,21 @@
 
 ;variables in the state
 (define variables car)
+
+;values in the state
+(define valuesInState cadr)
+
+;outerLevelVariables gets the variables in the outer most scope
+(define outerLevelVariables caar)
+
+;outerLevelValues gets the values in the outer most scope
+(define outerLevelValues caadr)
+
+;secondLevelVariables gets the variables in the outer most scope
+(define secondLevelVariables cadar)
+
+;secondLevelValues gets the values in the outer most scope
+(define secondLevelValues cadadr)
 
 ;gets the first variable in the state
 (define variable1 caar)
