@@ -17,12 +17,8 @@
 (define Mstate
   (lambda (statement state return break)
     (cond
-<<<<<<< HEAD
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
-      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
-=======
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return break)))
->>>>>>> d8a1a853198cb3c48f091c51cf03e8e767cbf39f
+      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return break))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'while) 
@@ -45,28 +41,28 @@
 
 ;Mstate-try handles try blocks
 (define Mstate-try
-  (lambda (try catch finally state return)
+  (lambda (try catch finally state return break)
     (cond
-      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
-      ((eq? (operator (firstExpression try)) 'throw) (Mstate-catch catch finally (operand (firstExpression try)) (addLevelOfScope (getInnerScope state)) return))
-      (else (Mstate-try (restOfExpressions try) catch finally (Mstate (firstExpression try) state return) return)))))
+      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return break))
+      ((eq? (operator (firstExpression try)) 'throw) (Mstate-catch catch finally (operand (firstExpression try)) (addLevelOfScope (getInnerScope state)) return break))
+      (else (Mstate-try (restOfExpressions try) catch finally (Mstate (firstExpression try) state return break) return break)))))
 
 ;Mstate-catch handles catch statements
 (define Mstate-catch
-  (lambda (catch fnally e state return)
+  (lambda (catch fnally e state return break)
     (cond
-      ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
-      ((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally e state return))
-      ((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally e (insert 'e e) return))
-      (else (Mstate-catch (restOfExpressions catch) finally e (Mstate (firstExpression catch) state return) return)))))
+      ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return break))
+      ((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally e state return break))
+      ((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally e (insert 'e e) return break))
+      (else (Mstate-catch (restOfExpressions catch) finally e (Mstate (firstExpression catch) state return break) return break)))))
 
 ;Mstate-finally handle finally block
 (define Mstate-finally
-  (lambda (finally state return)
+  (lambda (finally state return break)
     (cond
       ((null? finally) (getInnerScope state))
       ((eq? (operator finally) 'finally) (Mstate-finally (finallyExpressions finally) state return))
-      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return) return)))))
+      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return break) return break)))))
 
 ; Mstate-begin handles begin statements
 (define Mstate-begin
@@ -79,28 +75,16 @@
 (define Mstate-if
   (lambda (statement state return break)
     (cond
-<<<<<<< HEAD
-      ((eq? (Mbool (if-condition statement) state) 'true) (Mstate (if-statement statement) state return))
-      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return))
-=======
       ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break))
->>>>>>> d8a1a853198cb3c48f091c51cf03e8e767cbf39f
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
-<<<<<<< HEAD
-  (lambda (condition statement state return)
-    (cond
-      ((eq? (Mbool condition state) 'true) (Mstate-while condition statement (Mstate statement state return) return))
-      (else state))))
-=======
   (lambda (condition statement state return break)
     (if (eq? (Mbool condition state) 'true)
       (Mstate-while condition statement (Mstate statement state return break) return break))
       state))
->>>>>>> d8a1a853198cb3c48f091c51cf03e8e767cbf39f
 
 ; MState-var handles variable declaration
 (define Mstate-var
