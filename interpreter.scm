@@ -18,6 +18,7 @@
   (lambda (statement state return)
     (cond
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return)))
+      ((eq? (operator statement) 'try) (getInnerScope (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return)))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'if) (Mstate-if statement state return))
       ((eq? (operator statement) 'while) (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return))
@@ -25,19 +26,40 @@
       ((eq? (operator statement) '=) (Mstate-assignment statement state)) ; no need to pass return?
       (else (error 'unknown "Encountered an unknown statement")))))
 
+(define try cadr)
+
+(define catch caddr)
+
+(define finally cadddr)
+
+;Mstate-try handles try blocks
+(define Mstate-try
+  (lambda (try catch finally state return)
+    (cond
+      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state))))
+      ((eq? (operator (firstExpression try)) 'throw) (Mstate-catch catch finally (operand (firstExpression try)) (addLevelOfScope (getInnerScope state)) return))
+      (else (Mstate-try (restOfExpressions try) catch finally (Mstate (firstExpression try) state return) return)))))
+
+;Mstate-catch handles catch statements
+(define Mstate-catch
+  (lambda (catch fnally e state return)
+    (cond
+      ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
+      ((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally e (insert 'e e) return))
+      (else (Mstate-catch(restOfExpressions statement) finally e (Mstate (firstExpression catch) state return) return)))))
+
+; Mstate-begin handles begin statements
 (define Mstate-begin
   (lambda (statement state return)
     (cond
       ((null? statement) state)
       (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return) return)))))
 
-(define insideBraces cdr)
-
 ; Mstate-if handles if statements
 (define Mstate-if
   (lambda (statement state return)
     (cond
-      ((Mbool (if-condition statement) state) (Mstate (if-statement statement) state return))
+      ((eq? (Mbool (if-condition statement) state) 'true) (Mstate (if-statement statement) state return))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return))
       (else state))))
 
@@ -45,10 +67,10 @@
 (define Mstate-while
   (lambda (condition statement state return)
     (cond
-      ((and (eq? (Mbool condition state) 'true) (eq? (lookup 'return state) 'null)) (Mstate-while condition statement (Mstate statement state) return))
+      ((eq? (Mbool condition state) 'true) (Mstate-while condition statement (Mstate statement state return) return))
       (else state))))
 
-; MState-eq handles variable declaration
+; MState-var handles variable declaration
 (define Mstate-var
   (lambda (statement state)
     (cond
@@ -164,6 +186,9 @@
 (define getInnerScope
   (lambda (state)
     (cons (cadar state) (cons (cadadr state) '()))))
+
+;gets the code inside the braces
+(define insideBraces cdr)
 
 ; comparator
 (define comparator car)
