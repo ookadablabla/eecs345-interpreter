@@ -33,7 +33,7 @@
 
 (define finally cadddr)
 
-(define finallyExpressions caadr)
+(define finallyExpressions cadr)
 
 ;Mstate-try handles try blocks
 (define Mstate-try
