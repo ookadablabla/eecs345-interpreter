@@ -33,11 +33,13 @@
 
 (define finally cadddr)
 
+(define finallyExpressions caadr)
+
 ;Mstate-try handles try blocks
 (define Mstate-try
   (lambda (try catch finally state return)
     (cond
-      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state))))
+      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
       ((eq? (operator (firstExpression try)) 'throw) (Mstate-catch catch finally (operand (firstExpression try)) (addLevelOfScope (getInnerScope state)) return))
       (else (Mstate-try (restOfExpressions try) catch finally (Mstate (firstExpression try) state return) return)))))
 
@@ -55,8 +57,8 @@
   (lambda (finally state return)
     (cond
       ((null? finally) (getInnerScope state))
-      ((eq? (operator finally) 'finally) (Mstate-finally (restOfExpressions finally) state return))
-      (else (Mstate-finally (resteOfExpressions finally) (Mstate (firstExpression finally) state return) return)))))
+      ((eq? (operator finally) 'finally) (Mstate-finally (finallyExpressions finally) state return))
+      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return) return)))))
 
 ; Mstate-begin handles begin statements
 (define Mstate-begin
