@@ -22,6 +22,7 @@
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'while)
         (call/cc
@@ -29,6 +30,41 @@
             (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break))))
       (else (error 'unknown "Encountered an unknown statement")))))
 
+;Helpers for sending information to Mstate-try
+(define try cadr)
+
+(define catch caddr)
+
+(define finally cadddr)
+
+(define finallyExpressions cadr)
+
+;Mstate-try handles try blocks
+(define Mstate-try
+  (lambda (try catch finally state return)
+    (cond
+      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
+      ((eq? (operator (firstExpression try)) 'throw) (Mstate-catch catch finally (operand (firstExpression try)) (addLevelOfScope (getInnerScope state)) return))
+      (else (Mstate-try (restOfExpressions try) catch finally (Mstate (firstExpression try) state return) return)))))
+
+;Mstate-catch handles catch statements
+(define Mstate-catch
+  (lambda (catch fnally e state return)
+    (cond
+      ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
+      ((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally e state return))
+      ((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally e (insert 'e e) return))
+      (else (Mstate-catch (restOfExpressions catch) finally e (Mstate (firstExpression catch) state return) return)))))
+
+;Mstate-finally handle finally block
+(define Mstate-finally
+  (lambda (finally state return)
+    (cond
+      ((null? finally) (getInnerScope state))
+      ((eq? (operator finally) 'finally) (Mstate-finally (finallyExpressions finally) state return))
+      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return) return)))))
+
+; Mstate-begin handles begin statements
 (define Mstate-begin
   (lambda (statement state return break)
     (cond
@@ -46,11 +82,11 @@
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state return break)
-    (if (eq? (Mbool condition state) 'true)
+    (if (eq? 'true (Mbool condition state))
       (Mstate-while condition statement (Mstate statement state return break) return break))
       state))
 
-; MState-eq handles variable declaration
+; MState-var handles variable declaration
 (define Mstate-var
   (lambda (statement state)
     (cond
@@ -165,6 +201,9 @@
 (define getInnerScope
   (lambda (state)
     (cons (cadar state) (cons (cadadr state) '()))))
+
+;gets the code inside the braces
+(define insideBraces cdr)
 
 ; comparator
 (define comparator car)
