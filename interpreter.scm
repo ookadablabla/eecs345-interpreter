@@ -18,7 +18,7 @@
   (lambda (statement state return break)
     (cond
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return break)))
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return (lambda (v) (break (getInnerScope v))))))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
@@ -142,7 +142,7 @@
 (define lookup-flattened
   (lambda (var state)
     (cond
-      ((null? (variables state)) (error 'unknown "that variable does not exist"))
+      ((null? (variables state)) (error 'unknown (format "Variable ~a does not exist" var)))
       ((eq? (variable1 state) var) (valueOfVar1 state))
       (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
 
