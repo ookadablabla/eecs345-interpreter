@@ -60,20 +60,6 @@
                           (lambda (s) (break (getInnerScope s)))
                           (lambda (s) (continue (getInnerScope s)))
                           (lambda (e s) (throw e (getInnerScope s))))))
-
-          ; previous version
-          ;(Mstate-try (try statement) (finally statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
-                                                                                         ;(lambda (s) (continue (getInnerScope s)))
-                                                                                         ;(lambda (e s) (throw e (getInnerScope s))))
-          ;(Mstate-try (try statement) (finally statement) (addLevelOfScope state) return break continue
-                      ;(lambda (e s)
-                        ;(Mstate-catch (catch-body (catch statement))
-                                      ;(finally statement)
-                                      ;(insert 'e e s)
-                                      ;return
-                                      ;(lambda (s) (break (getInnerScope s)))
-                                      ;(lambda (s) (continue (getInnerScope s)))
-                                      ;(lambda (e s) (throw e (getInnerScope s))))))))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'while)
         (call/cc
@@ -98,20 +84,17 @@
 (define Mstate-try
   (lambda (try state return break continue throw)
     (cond
-      ((null? try) (getInnerScope state)); (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return break continue throw))
+      ((null? try) (getInnerScope state))
       (else (Mstate-try (restOfExpressions try) (Mstate (firstExpression try) state return break continue throw) return break continue throw)))))
 
 ; Mstate-catch handles catch statements
-; This function takes a catch block, an exception
 (define Mstate-catch
   (lambda (catch state return break continue throw)
     (if (null? catch)
-      (getInnerScope state) ;(Mstate-finally finally (addLevelOfScope (getInnerScope state)) return break continue throw))
-      ;((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally state return break continue throw))
-      ;((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally state return break continue throw))
+      (getInnerScope state)
       (Mstate-catch (restOfExpressions catch) (Mstate (firstExpression catch) state return break continue throw) return break continue throw))))
 
-;Mstate-finally handle finally block
+;Mstate-finally handles finally blocks
 (define Mstate-finally
   (lambda (finally state return break continue throw)
     (cond
