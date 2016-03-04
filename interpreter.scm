@@ -13,8 +13,9 @@
                             (loop (restOfExpressions statement) (Mstate (firstExpression statement)
                                                                         state
                                                                         return
-                                                                        (lambda (v) (error 'invalidBreak "Break was called outside of a while loop"))
-                                                                        (lambda (v) (error 'invalidContinue "Continue was called outside of a while loop"))))))))
+                                                                        (lambda (s) (error 'invalidBreak "Break was called outside of a while loop"))
+                                                                        (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop"))
+                                                                        (lambda (e s) (error 'exception "An exception was thrown but not caught"))))))))
                 (loop (parser filename) '((true false) (true false))))))))
 
 ; Mstate modifies the state depending on the contents of statement.
@@ -25,12 +26,14 @@
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement)
                                                                       (addLevelOfScope state)
                                                                       return
-                                                                      (lambda (v) (break (getInnerScope v)))
-                                                                      (lambda (v) (continue (getInnerScope v))))))
+                                                                      (lambda (s) (break (getInnerScope s)))
+                                                                      (lambda (s) (continue (getInnerScope s)))
+                                                                      (lambda (e s) (throw e (getInnerScope s))))))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'throw) (throw ))
       ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'while)
@@ -58,7 +61,7 @@
 
 ;Mstate-catch handles catch statements
 (define Mstate-catch
-  (lambda (catch fnally e state return)
+  (lambda (catch finally e state return)
     (cond
       ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
       ((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally e state return))
