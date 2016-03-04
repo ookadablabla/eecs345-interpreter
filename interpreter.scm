@@ -5,29 +5,38 @@
 ; Parse and evaluate the file.
 (define interpret
   (lambda (filename)
-    (call/cc 
-      (lambda (return) ; TODO: You're trying to figure out how to forbid BREAKs outside of while loops. Initial BREAK should throw an error.
+    (call/cc
+      (lambda (return)
         (letrec ((loop (lambda (statement state)
-                          (if (null? statement) 
+                          (if (null? statement)
                             (return "Reached EOF without a return statement")
-                            (loop (restOfExpressions statement) (Mstate (firstExpression statement) state return (lambda (x) (error 'invalidBreak "Break was called outside of a while loop"))))))))
+                            (loop (restOfExpressions statement) (Mstate (firstExpression statement)
+                                                                        state
+                                                                        return
+                                                                        (lambda (v) (error 'invalidBreak "Break was called outside of a while loop"))
+                                                                        (lambda (v) (error 'invalidContinue "Continue was called outside of a while loop"))))))))
                 (loop (parser filename) '((true false) (true false))))))))
 
 ; Mstate modifies the state depending on the contents of statement.
 (define Mstate
-  (lambda (statement state return break)
+  (lambda (statement state return break continue)
     (cond
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement) (addLevelOfScope state) return break)))
-      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return break))
+      ((eq? (operator statement) '=) (Mstate-assignment statement state))
+      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement)
+                                                                      (addLevelOfScope state)
+                                                                      return
+                                                                      (lambda (v) (break (getInnerScope v)))
+                                                                      (lambda (v) (continue (getInnerScope v))))))
+      ((eq? (operator statement) 'break) (break state))
+      ((eq? (operator statement) 'continue) (continue state))
+      ((eq? (operator statement) 'if) (Mstate-if statement state return break continue))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
-      ((eq? (operator statement) 'if) (Mstate-if statement state return break))
-      ((eq? (operator statement) 'while) 
+      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
+      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
-            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break))))
-      ((eq? (operator statement) 'break) (break state))
-      ((eq? (operator statement) 'var) (Mstate-var statement state))
-      ((eq? (operator statement) '=) (Mstate-assignment statement state))
+            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue))))
       (else (error 'unknown "Encountered an unknown statement")))))
 
 ;Helpers for sending information to Mstate-try
@@ -66,31 +75,38 @@
 
 ; Mstate-begin handles begin statements
 (define Mstate-begin
-  (lambda (statement state return break)
+  (lambda (statement state return break continue)
     (cond
       ((null? statement) state)
-      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break) return break)))))
+      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break continue) return break continue)))))
 
 ; Mstate-if handles if statements
 (define Mstate-if
-  (lambda (statement state return break)
+  (lambda (statement state return break continue)
     (cond
-      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break))
-      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break))
+      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break continue))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break continue))
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
-  (lambda (condition statement state return break)
-    (if (eq? (Mbool condition state) 'true)
-      (Mstate-while condition statement (Mstate statement state return break) return break))
+  (lambda (condition statement state return break continue)
+    (if (eq? 'true (Mbool condition state))
+      (Mstate-while condition
+                    statement
+                    (call/cc
+                      (lambda (new-continue)
+                        (Mstate statement state return break new-continue)))
+                    return
+                    break
+                    continue))
       state))
 
 ; MState-var handles variable declaration
 (define Mstate-var
   (lambda (statement state)
     (cond
-      ((stateContains (variable statement) state) (error 'redefining "you can not declare a variable that has already been declared"))
+      ((stateContains (variable statement) state) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
       (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
@@ -113,12 +129,11 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       (else (Mbool statement state)))))
-      ;(else (error 'invalidInput "Expression cannot be evaluated to a value")))))
 
-; Mbool: Evaluate a statement for a truth value of #t or #f. 
+; Mbool: Evaluate a statement for a truth value of #t or #f.
 (define Mbool
   (lambda (statement state)
-    (cond 
+    (cond
       ((eq? statement 'true) 'true)
       ((eq? statement 'false) 'false)
       ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
@@ -143,7 +158,7 @@
 (define lookup-flattened
   (lambda (var state)
     (cond
-      ((null? (variables state)) (error 'unknown "that variable does not exist"))
+      ((null? (variables state)) (error 'unknown (format "Variable ~a does not exist" var)))
       ((eq? (variable1 state) var) (valueOfVar1 state))
       (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
 
@@ -180,7 +195,7 @@
 
 (define stateContains-flattened
   (lambda (var state)
-    (cond 
+    (cond
       ((null? (variables state)) #f)
       ((eq? (variable1 state) var) #t)
       (else (stateContains var (cons (restOfVars state) (cons (restOfValues state) '())))))))
@@ -264,7 +279,7 @@
 (define action caar)
 
 ;the expression being returned
-(define expression cdar)  
+(define expression cdar)
 
 (define parse-while-condition cadr)
 
@@ -286,3 +301,5 @@
 
 ;operation
 (define operation caddr)
+
+(define insideBraces cdr)
