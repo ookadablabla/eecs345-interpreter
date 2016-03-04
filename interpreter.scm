@@ -20,7 +20,7 @@
 
 ; Mstate modifies the state depending on the contents of statement.
 (define Mstate
-  (lambda (statement state return break continue)
+  (lambda (statement state return break continue throw)
     (cond
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
       ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement)
@@ -31,21 +31,64 @@
                                                                       (lambda (e s) (throw e (getInnerScope s))))))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
-      ((eq? (operator statement) 'if) (Mstate-if statement state return break continue))
+      ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
-      ((eq? (operator statement) 'throw) (throw ))
-      ((eq? (operator statement) 'try) (Mstate-try (try statement) (catch statement) (finally statement) (addLevelOfScope state) return))
+      ((eq? (operator statement) 'throw) (throw (exception statement) state))
+      ((eq? (operator statement) 'try)
+        (if (null? (catch statement))
+          (Mstate-finally (finally statement)
+                          (addLevelOfScope (Mstate-try (try statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
+                                                                                     (lambda (s) (continue (getInnerScope s)))
+                                                                                     (lambda (e s) (throw e (getInnerScope s)))))
+                          return
+                          (lambda (s) (break (getInnerScope s)))
+                          (lambda (s) (continue (getInnerScope s)))
+                          (lambda (e s) (throw e (getInnerScope s))))
+          (Mstate-finally (finally statement)
+                          (addLevelOfScope
+                            (call/cc
+                              (lambda (new-throw)
+                                (Mstate-try (try statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
+                                                                                           (lambda (s) (continue (getInnerScope s)))
+                                                                                           (lambda (e s) (new-throw (Mstate-catch (catch-body (catch statement))
+                                                                                                                                  (insert (caadr (catch statement)) e (addLevelOfScope (getInnerScope s)))
+                                                                                                                                  return
+                                                                                                                                  (lambda (s) (break (getInnerScope s)))
+                                                                                                                                  (lambda (s) (continue (getInnerScope s)))
+                                                                                                                                  (lambda (e s) (throw e (getInnerScope s))))))))))
+                          return
+                          (lambda (s) (break (getInnerScope s)))
+                          (lambda (s) (continue (getInnerScope s)))
+                          (lambda (e s) (throw e (getInnerScope s))))))
+
+          ; previous version
+          ;(Mstate-try (try statement) (finally statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
+                                                                                         ;(lambda (s) (continue (getInnerScope s)))
+                                                                                         ;(lambda (e s) (throw e (getInnerScope s))))
+          ;(Mstate-try (try statement) (finally statement) (addLevelOfScope state) return break continue
+                      ;(lambda (e s)
+                        ;(Mstate-catch (catch-body (catch statement))
+                                      ;(finally statement)
+                                      ;(insert 'e e s)
+                                      ;return
+                                      ;(lambda (s) (break (getInnerScope s)))
+                                      ;(lambda (s) (continue (getInnerScope s)))
+                                      ;(lambda (e s) (throw e (getInnerScope s))))))))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
-            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue))))
+            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue throw))))
       (else (error 'unknown "Encountered an unknown statement")))))
+
+(define exception cadr)
 
 ;Helpers for sending information to Mstate-try
 (define try cadr)
 
 (define catch caddr)
+
+(define catch-body caddr)
 
 (define finally cadddr)
 
@@ -53,56 +96,57 @@
 
 ;Mstate-try handles try blocks
 (define Mstate-try
-  (lambda (try catch finally state return)
+  (lambda (try state return break continue throw)
     (cond
-      ((null? try) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
-      ((eq? (operator (firstExpression try)) 'throw) (Mstate-catch catch finally (operand (firstExpression try)) (addLevelOfScope (getInnerScope state)) return))
-      (else (Mstate-try (restOfExpressions try) catch finally (Mstate (firstExpression try) state return) return)))))
+      ((null? try) (getInnerScope state)); (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return break continue throw))
+      (else (Mstate-try (restOfExpressions try) (Mstate (firstExpression try) state return break continue throw) return break continue throw)))))
 
-;Mstate-catch handles catch statements
+; Mstate-catch handles catch statements
+; This function takes a catch block, an exception
 (define Mstate-catch
-  (lambda (catch finally e state return)
-    (cond
-      ((null? catch) (Mstate-finally finally (addLevelOfScope (getInnerScope state)) return))
-      ((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally e state return))
-      ((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally e (insert 'e e) return))
-      (else (Mstate-catch (restOfExpressions catch) finally e (Mstate (firstExpression catch) state return) return)))))
+  (lambda (catch state return break continue throw)
+    (if (null? catch)
+      (getInnerScope state) ;(Mstate-finally finally (addLevelOfScope (getInnerScope state)) return break continue throw))
+      ;((eq? (operator catch) 'catch) (Mstate-catch (restOfExpressions catch) finally state return break continue throw))
+      ;((eq? (operator (firstExpression catch)) 'e) (Mstate-catch (restOfExpressions catch) finally state return break continue throw))
+      (Mstate-catch (restOfExpressions catch) (Mstate (firstExpression catch) state return break continue throw) return break continue throw))))
 
 ;Mstate-finally handle finally block
 (define Mstate-finally
-  (lambda (finally state return)
+  (lambda (finally state return break continue throw)
     (cond
       ((null? finally) (getInnerScope state))
-      ((eq? (operator finally) 'finally) (Mstate-finally (finallyExpressions finally) state return))
-      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return) return)))))
+      ((eq? (operator finally) 'finally) (Mstate-finally (finallyExpressions finally) state return break continue throw))
+      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return break continue throw) return break continue throw)))))
 
 ; Mstate-begin handles begin statements
 (define Mstate-begin
-  (lambda (statement state return break continue)
+  (lambda (statement state return break continue throw)
     (cond
       ((null? statement) state)
-      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break continue) return break continue)))))
+      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break continue throw) return break continue throw)))))
 
 ; Mstate-if handles if statements
 (define Mstate-if
-  (lambda (statement state return break continue)
+  (lambda (statement state return break continue throw)
     (cond
-      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break continue))
-      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break continue))
+      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break continue throw))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break continue throw))
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
-  (lambda (condition statement state return break continue)
+  (lambda (condition statement state return break continue throw)
     (if (eq? 'true (Mbool condition state))
       (Mstate-while condition
                     statement
                     (call/cc
                       (lambda (new-continue)
-                        (Mstate statement state return break new-continue)))
+                        (Mstate statement state return break new-continue throw)))
                     return
                     break
-                    continue))
+                    continue
+                    throw))
       state))
 
 ; MState-var handles variable declaration
