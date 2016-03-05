@@ -15,7 +15,7 @@
                                                                         return
                                                                         (lambda (s) (error 'invalidBreak "Break was called outside of a while loop"))
                                                                         (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop"))
-                                                                        (lambda (e s) (error 'exception "An exception was thrown but not caught"))))))))
+                                                                        (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught"))))))))
                 (loop (parser filename) '((true false) (true false))))))))
 
 ; Mstate modifies the state depending on the contents of statement.
