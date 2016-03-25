@@ -1,6 +1,6 @@
 ; EECS 345 Class Project 2
 ; James Hochadel and Andrew Marmorstein
-(load "simpleParser.scm")
+(load "functionParser.scm")
 
 ; Parse and evaluate the file.
 (define interpret
