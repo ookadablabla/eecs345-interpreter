@@ -134,13 +134,6 @@
     (cond
       ((stateContains (funcName statement) state) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) state)))))
-
-;helper methods for Mstate-func
-(define funcName cadr)
-
-(define getParams caddr)
-
-(define getBody cadddr)
     
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
@@ -181,18 +174,45 @@
 
 ; HELPER METHODS
 
-;lookup gets the value for a given variable
-;takes a variable name and the state and returns the value of that variable
 (define lookup
   (lambda (var state)
-    (lookup-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+    (cond
+      ((null? (nextLayers state)) (error 'unknown (format "Variable ~a does not exist" var)))
+      ((not (list? (variableList state)))  (lookupVal var state))
+      ((stateContains var (currentLayer state)) (lookupVal var (currentLayer state)))
+      (else (lookup (nextLayers state))))))
 
-(define lookup-flattened
+(define lookupVal
   (lambda (var state)
     (cond
-      ((null? (variables state)) (error 'unknown (format "Variable ~a does not exist" var)))
       ((eq? (variable1 state) var) (valueOfVar1 state))
-      (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+      (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+
+;helpers for lookup
+(define nextLayers cdr)
+
+(define currentLayer car)
+
+(define variableList caar)
+      
+;lookup gets the value for a given variable
+;takes a variable name and the state and returns the value of that variable
+;(define lookup
+;  (lambda (var state)
+;    (lookup-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))));
+;
+;(define lookup-flattened
+;  (lambda (var state)
+;    (cond
+;      ((null? (variables state)) (error 'unknown (format "Variable ~a does not exist" var)))
+;      ((eq? (variable1 state) var) (valueOfVar1 state))
+;      (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+;setEnvironment sets the environment in the closure function
+(define setEnvironment
+  (lambda (funcall)
+    ()))
 
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
@@ -229,14 +249,19 @@
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
   (lambda (var state)
-    (stateContains-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+    (stateContains-flattened var (flatten (variables state)))))
 
 (define stateContains-flattened
-  (lambda (var state)
+  (lambda (var variablesInState)
     (cond
-      ((null? (variables state)) #f)
-      ((eq? (variable1 state) var) #t)
-      (else (stateContains var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+      ((null? variablesInState) #f)
+      ((eq? (var1 variablesInState) var) #t)
+      (else (stateContains-flattened var (resOfVariablesInState variablesInState))))))
+
+;helper for state contains
+(define var1 car)
+
+(define resOfVariablesInState cdr)
 
 ;flatten flattens out a list
 (define flatten
@@ -354,3 +379,10 @@
 (define finally cadddr)
 
 (define finallyExpressions cadr)
+
+;helper methods for Mstate-func
+(define funcName cadr)
+
+(define getParams caddr)
+
+(define getBody cadddr)
