@@ -66,24 +66,12 @@
                           (lambda (s) (continue (getInnerScope s)))
                           (lambda (e s) (throw e (getInnerScope s))))))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) 'function) (Mstate-func statement state))
       ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
             (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue throw))))
       (else (error 'unknown "Encountered an unknown statement")))))
-
-(define exception cadr)
-
-;Helpers for sending information to Mstate-try
-(define try cadr)
-
-(define catch caddr)
-
-(define catch-body caddr)
-
-(define finally cadddr)
-
-(define finallyExpressions cadr)
 
 ;Mstate-try handles try blocks
 (define Mstate-try
@@ -148,6 +136,20 @@
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
       (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
+;Mstate-func handles function declorations
+(define Mstate-func
+  (lambda (statement state)
+    (cond
+      ((stateContains (funcName statement) state) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
+      (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) state)))))
+
+;helper methods for Mstate-func
+(define funcName cadr)
+
+(define getParams caddr)
+
+(define getBody cadddr)
+    
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
@@ -225,6 +227,12 @@
       ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
                                                  (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelValues state) '())) '())))
       (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
+
+;createClosure creates a closure functon that will be added to the state
+;the thirsd part of the cosure is the framework for the environment
+(define createClosure
+  (lambda (params body)
+    (cons params (cons body '(((()())(()())))))))
 
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
@@ -341,3 +349,16 @@
 (define operation caddr)
 
 (define insideBraces cdr)
+
+(define exception cadr)
+
+;Helpers for sending information to Mstate-try
+(define try cadr)
+
+(define catch caddr)
+
+(define catch-body caddr)
+
+(define finally cadddr)
+
+(define finallyExpressions cadr)
