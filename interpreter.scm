@@ -39,12 +39,22 @@
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
       ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
       ((eq? (operator statement) 'throw) (throw (exception statement) state))
-      ((eq? (operator statement) 'try)
-        (if (null? (catch statement))
+      ((eq? (operator statement) 'try) (Mstate-tcf statement state return break continue throw))
+      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) 'function) (Mstate-func statement state))
+      ((eq? (operator statement) 'while)
+        (call/cc
+          (lambda (new-break)
+            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue throw))))
+      (else (error 'unknown "Encountered an unknown statement")))))
+
+(define Mstate-tcf
+  (lambda (statement state return break continue throw)
+    (if (null? (catch statement))
           (Mstate-finally (finally statement)
                           (addLevelOfScope (Mstate-try (try statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
-                                                                                     (lambda (s) (continue (getInnerScope s)))
-                                                                                     (lambda (e s) (throw e (getInnerScope s)))))
+                                                                                                      (lambda (s) (continue (getInnerScope s)))
+                                                                                                      (lambda (e s) (throw e (getInnerScope s)))))
                           return
                           (lambda (s) (break (getInnerScope s)))
                           (lambda (s) (continue (getInnerScope s)))
@@ -64,14 +74,7 @@
                           return
                           (lambda (s) (break (getInnerScope s)))
                           (lambda (s) (continue (getInnerScope s)))
-                          (lambda (e s) (throw e (getInnerScope s))))))
-      ((eq? (operator statement) 'var) (Mstate-var statement state))
-      ((eq? (operator statement) 'function) (Mstate-func statement state))
-      ((eq? (operator statement) 'while)
-        (call/cc
-          (lambda (new-break)
-            (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue throw))))
-      (else (error 'unknown "Encountered an unknown statement")))))
+                          (lambda (e s) (throw e (getInnerScope s)))))))
 
 ;Mstate-try handles try blocks
 (define Mstate-try
@@ -149,7 +152,7 @@
 (define getParams caddr)
 
 (define getBody cadddr)
-    
+
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
