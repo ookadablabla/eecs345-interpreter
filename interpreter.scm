@@ -10,6 +10,7 @@
   (lambda (filename)
     (call/cc
       (lambda (return)
+
         (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
              (begin-interpret (parser filename) initial-state))))))
 
@@ -22,6 +23,14 @@
       (do-interpret (restOfExpressions statement)
                     (Mstate (firstExpression statement) state return break continue throw)
                     return break continue throw))))
+
+; Accepts a parse tree and returns the state after parsing global variables and top-level functions
+(define interpret-global
+  (lambda (statements)))
+
+(define Mstate-funcall
+  (lambda (funcName actualParams state return break continue throw)
+    (do-interpret )))
 
 (define initial-state '((true false) (true false)))
 (define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
@@ -149,7 +158,7 @@
 (define getParams caddr)
 
 (define getBody cadddr)
-    
+
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
