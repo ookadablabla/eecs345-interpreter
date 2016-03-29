@@ -198,7 +198,9 @@
 ;getGlobal gets the global variables for the environment
 (define getGlobal
   (lambda (funName state)
-    ()))
+    (cond
+      ((varsContain funName (variables state)) state)
+      (else (getGlobal funName (nextLayers state))))))
 
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
@@ -211,8 +213,8 @@
 (define get_replaced
   (lambda (var value state)
     (cond
-      ((eq? (variable1 state) var) (cons (cons (cons var (restOfVars state)) (cons (cons value (restOfValues state)) '())) '()))
-      (else (insert (variable1 state) (valueOfVar1 state) (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))))))))
+      ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons value (restOfValues state)) '())))
+      (else (currentLayer (insert (variable1 state) (valueOfVar1 state) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
 
 ;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
@@ -284,10 +286,10 @@
 (define outerLevelVariables caar)
 
 ;outerLevelValues gets the values in the outer most scope
-(define outerLevelValues caadr)
+(define outerLevelValues cadar)
 
 ;secondLevelVariables gets the variables in the outer most scope
-(define secondLevelVariables cadar)
+(define secondLevelVariables caadr)
 
 ;secondLevelValues gets the values in the outer most scope
 (define secondLevelValues cadadr)
