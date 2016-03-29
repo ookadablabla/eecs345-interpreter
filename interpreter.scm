@@ -202,6 +202,22 @@
       ((varsContain funName (variables state)) state)
       (else (getGlobal funName (nextLayers state))))))
 
+;getLocal get all of the local variable for the function which will be the parameters
+(define getLocal
+  (lambda (funParams paramValues state)
+    (getLocalWithFormat funParams paramValues state '(()()))))
+
+(define getLocalWithFormat
+  (lambda (funParams paramValues state localState)
+    (cond
+      ((null? funParams) localState)
+      (else (getLocalWithFormat (restOfParams funParams) (restOfParamValues paramValues) state (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state) (cons localState '()))))))))
+
+(define restOfParams cdr)
+(define restOfParamValues cdr)
+(define currentParam car)
+(define currentParamValue car)
+
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
 (define replace_var
