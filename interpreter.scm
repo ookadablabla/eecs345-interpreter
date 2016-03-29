@@ -177,9 +177,9 @@
 (define lookup
   (lambda (var state)
     (cond
-      ((null? (nextLayers state)) (error 'unknown (format "Variable ~a does not exist" var)))
-      ((stateContains var (currentLayer state)) (lookupVal var (currentLayer state)))
-      (else (lookup (nextLayers state))))))
+      ((null? state) (error 'unknown (format "Variable ~a does not exist" var)))
+      ((varsContain var (variables state)) (lookupVal var (currentLayer state)))
+      (else (lookup var (nextLayers state))))))
 
 (define lookupVal
   (lambda (var state)
