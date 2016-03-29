@@ -16,7 +16,7 @@
                                                                         (lambda (s) (error 'invalidBreak "Break was called outside of a while loop"))
                                                                         (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop"))
                                                                         (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught"))))))))
-                (loop (parser filename) '((true false) (true false))))))))
+                (loop (parser filename) '(((true false) (true false)))))))))
 
 ; Mstate modifies the state depending on the contents of statement.
 (define Mstate
@@ -178,7 +178,6 @@
   (lambda (var state)
     (cond
       ((null? (nextLayers state)) (error 'unknown (format "Variable ~a does not exist" var)))
-      ((not (list? (variableList state)))  (lookupVal var state))
       ((stateContains var (currentLayer state)) (lookupVal var (currentLayer state)))
       (else (lookup (nextLayers state))))))
 
@@ -195,23 +194,10 @@
 (define currentLayer car)
 
 (define variableList caar)
-      
-;lookup gets the value for a given variable
-;takes a variable name and the state and returns the value of that variable
-;(define lookup
-;  (lambda (var state)
-;    (lookup-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))));
-;
-;(define lookup-flattened
-;  (lambda (var state)
-;    (cond
-;      ((null? (variables state)) (error 'unknown (format "Variable ~a does not exist" var)))
-;      ((eq? (variable1 state) var) (valueOfVar1 state))
-;      (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
 
-;setEnvironment sets the environment in the closure function
-(define setEnvironment
-  (lambda (funcall)
+;getGlobal gets the global variables for the environment
+(define getGlobal
+  (lambda (funName state)
     ()))
 
 ;remove removes a variable from the state
@@ -233,12 +219,8 @@
 (define insert
   (lambda (var value state)
     (cond
-      ((null? state) (cons (cons var '()) (cons (car (cons (cons value state) '())) '())))
-      ((null? (variables state)) state)
       ((stateContains var state) (replace_var var value state))
-      ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
-                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelValues state) '())) '())))
-      (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
+      (else (cons (cons (cons var (variables state)) (cons (cons value (valuesInState state)) '())) (cdr state))))))
 
 ;createClosure creates a closure functon that will be added to the state
 ;the thirsd part of the cosure is the framework for the environment
@@ -249,14 +231,17 @@
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
   (lambda (var state)
-    (stateContains-flattened var (flatten (variables state)))))
-
-(define stateContains-flattened
-  (lambda (var variablesInState)
     (cond
-      ((null? variablesInState) #f)
-      ((eq? (var1 variablesInState) var) #t)
-      (else (stateContains-flattened var (resOfVariablesInState variablesInState))))))
+      ((null? state) #f)
+      ((varsContain var (variables state)) #t)
+      (else (stateContains var (nextLayers state))))))
+
+(define varsContain
+  (lambda (var varList)
+    (cond
+     ((null? varList) #f)
+     ((eq? var (car varList)) #t)
+     (else (varsContain var (cdr varList)))))) 
 
 ;helper for state contains
 (define var1 car)
@@ -274,12 +259,10 @@
 ;adds a level of scope to the given state
 (define addLevelOfScope
   (lambda (state)
-    (cons (cons '() (cons (car state) '())) (cons (cons '() (cons (cadr state) '())) '()))))
+    (cons '(()()) state)))
 
 ;remove the outer most level of scope
-(define getInnerScope
-  (lambda (state)
-    (cons (cadar state) (cons (cadadr state) '()))))
+(define getInnerScope cdr)
 
 ;gets the code inside the braces
 (define insideBraces cdr)
@@ -300,10 +283,10 @@
 (define operand2 caddr)
 
 ;variables in the state
-(define variables car)
+(define variables caar)
 
 ;values in the state
-(define valuesInState cadr)
+(define valuesInState cadar)
 
 ;outerLevelVariables gets the variables in the outer most scope
 (define outerLevelVariables caar)
@@ -330,7 +313,7 @@
 (define restOfValues cdadr)
 
 ;get the values in the state
-(define allValues cadr)
+(define allValues cadar)
 
 ;the expression in the stat of the program
 (define firstExpression car)
