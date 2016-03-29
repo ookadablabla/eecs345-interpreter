@@ -195,6 +195,16 @@
 
 (define variableList caar)
 
+;getEnvirontment gets the environment within which a function call has access
+;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
+(define getEnvironmentFromFuncall
+  (lambda (funcall state)
+    (getEnvironment (name funcall) (getParamsFromState (name funcall) state) (paramValues funcall) state)))
+
+(define getEnvironment
+  (lambda (funName funParams funParamValues state)
+    (cons (getLocal funParams funParamValues state) (cons (getGlobal funName state))))) 
+  
 ;getGlobal gets the global variables for the environment
 (define getGlobal
   (lambda (funName state)
@@ -213,10 +223,19 @@
       ((null? funParams) localState)
       (else (getLocalWithFormat (restOfParams funParams) (restOfParamValues paramValues) state (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state) (cons localState '()))))))))
 
+;helpers for getLocal
 (define restOfParams cdr)
 (define restOfParamValues cdr)
 (define currentParam car)
 (define currentParamValue car)
+
+;helpers for getEnvironment
+(define getParamsFromState
+  (lambda (funName state)
+    (car (lookup funName state))))
+
+(define name cadr)
+(define paramValues cddr)
 
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
