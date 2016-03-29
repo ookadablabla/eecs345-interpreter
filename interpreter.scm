@@ -205,14 +205,14 @@
 (define replace_var
   (lambda (var value state)
     (cond
-      ((null? (variables state)) state)
-      ((list? (outerLevelVariables state)) (cons (cons (variables (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
-                                                       (cons (variables (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '()))
-                                                 (cons (cons (valuesInState (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
-                                                       (cons (valuesInState (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '())) '())))
-      ((eq? (variable1 state) var) (cons (cons (variable1 state) (restOfVars state)) (cons (cons value (restOfValues state)) '())))
-      (else (cons (cons (variable1 state) (variables (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '())))))
-                  (cons (cons (valueOfVar1 state) (allValues (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
+      ((varsContain var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
+      (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
+
+(define get_replaced
+  (lambda (var value state)
+    (cond
+      ((eq? (variable1 state) var) (cons (cons (cons var (restOfVars state)) (cons (cons value (restOfValues state)) '())) '()))
+      (else (insert (variable1 state) (valueOfVar1 state) (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))))))))
 
 ;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
@@ -240,21 +240,13 @@
   (lambda (var varList)
     (cond
      ((null? varList) #f)
-     ((eq? var (car varList)) #t)
+     ((eq? var (var1 varList)) #t)
      (else (varsContain var (cdr varList)))))) 
 
 ;helper for state contains
 (define var1 car)
 
 (define resOfVariablesInState cdr)
-
-;flatten flattens out a list
-(define flatten
-  (lambda (l)
-    (cond
-      ((null? l) '())
-      ((list? (car l)) (append (flatten (car l)) (flatten (cdr l))))
-      (else (cons (car l) (flatten (cdr l)))))))
 
 ;adds a level of scope to the given state
 (define addLevelOfScope
