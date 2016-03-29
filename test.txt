@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 function min(x, y, z) {
   if (x < y) {
     if (x < z)
@@ -10,6 +11,11 @@ function min(x, y, z) {
   else
     return y;
 }
+=======
+
+var x = 4;
+var y = 6 + x;
+>>>>>>> 9a0d10bb8d8eab2ffb032443e5d5ba080e41d5a4
 
 var x = 10;
 var y = 20;

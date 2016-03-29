@@ -1,34 +1,39 @@
 ; EECS 345 Class Project 2
 ; James Hochadel and Andrew Marmorstein
+;
+; This code was restructured using solution2.scm from Blackboard to better abstract certain
+; functions and generally clean up Mstate.
 (load "functionParser.scm")
 
-; Parse and evaluate the file.
+; Parse and begin evaluation of the file.
 (define interpret
   (lambda (filename)
     (call/cc
       (lambda (return)
-        (letrec ((loop (lambda (statement state)
-                          (if (null? statement)
-                            (return "Reached EOF without a return statement")
-                            (loop (restOfExpressions statement) (Mstate (firstExpression statement)
-                                                                        state
-                                                                        return
-                                                                        (lambda (s) (error 'invalidBreak "Break was called outside of a while loop"))
-                                                                        (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop"))
-                                                                        (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught"))))))))
-                (loop (parser filename) '(((true false) (true false)))))))))
+        (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
+             (begin-interpret (parser filename) initial-state))))))
+
+; do-interpret recursively evaluates statements and modifies the state appropriately
+; based on their contents.
+(define do-interpret
+  (lambda (statement state return break continue throw)
+    (if (null? statement)
+      state
+      (do-interpret (restOfExpressions statement)
+                    (Mstate (firstExpression statement) state return break continue throw)
+                    return break continue throw))))
+
+(define initial-state '(((true false) (true false))))
+(define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
+(define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
+(define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
 
 ; Mstate modifies the state depending on the contents of statement.
 (define Mstate
   (lambda (statement state return break continue throw)
     (cond
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
-      ((eq? (operator statement) 'begin) (getInnerScope (Mstate-begin (insideBraces statement)
-                                                                      (addLevelOfScope state)
-                                                                      return
-                                                                      (lambda (s) (break (getInnerScope s)))
-                                                                      (lambda (s) (continue (getInnerScope s)))
-                                                                      (lambda (e s) (throw e (getInnerScope s))))))
+      ((eq? (operator statement) 'begin) (Mstate-begin statement state return break continue throw))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
@@ -93,9 +98,12 @@
 ; Mstate-begin handles begin statements
 (define Mstate-begin
   (lambda (statement state return break continue throw)
-    (cond
-      ((null? statement) state)
-      (else (Mstate-begin (restOfExpressions statement) (Mstate (firstExpression statement) state return break continue throw) return break continue throw)))))
+    (getInnerScope (do-interpret (insideBraces statement)
+                                 (addLevelOfScope state)
+                                 return
+                                 (lambda (s) (break (getInnerScope s)))
+                                 (lambda (s) (continue (getInnerScope s)))
+                                 (lambda (e s) (throw e (getInnerScope s)))))))
 
 ; Mstate-if handles if statements
 (define Mstate-if
