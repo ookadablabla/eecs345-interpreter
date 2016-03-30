@@ -13,6 +13,25 @@
         (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
              (begin-interpret (parser filename) initial-state))))))
 
+(define new-interpret
+  (lambda (filename)
+    (call/cc
+     (lambda (return)
+       (do-interpret '((funcall main))
+                     (do-interpret
+                      (parser filename)
+                      initial-state
+                      (lambda (statement state) (return state))
+                      default-break
+                      default-continue
+                      default-throw)
+                     (lambda (statement state) (return (Mvalue (operand statement) state)))
+                     default-break
+                      default-continue
+                      default-throw)))))
+       
+
+
 ; do-interpret recursively evaluates statements and modifies the state appropriately
 ; based on their contents.
 (define do-interpret
@@ -23,7 +42,7 @@
                     (Mstate (firstExpression statement) state return break continue throw)
                     return break continue throw))))
 
-(define initial-state '((true false) (true false)))
+(define initial-state '(((true false) (true false))))
 (define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
 (define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
 (define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
@@ -37,7 +56,7 @@
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
-      ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'return) (return statement state))
       ((eq? (operator statement) 'throw) (throw (exception statement) state))
       ((eq? (operator statement) 'try)
         (if (null? (catch statement))
@@ -67,6 +86,7 @@
                           (lambda (e s) (throw e (getInnerScope s))))))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
+      ((eq? (operator statement) 'funcall) (Mstate-funcall statement state return break continue throw))
       ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
@@ -142,13 +162,6 @@
     (cond
       ((stateContains (funcName statement) state) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) state)))))
-
-;helper methods for Mstate-func
-(define funcName cadr)
-
-(define getParams caddr)
-
-(define getBody cadddr)
     
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
@@ -168,6 +181,9 @@
       ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) 'funcall) (call/cc
+                                            (lambda (new-return)
+                                              (do-interpret (getFuncBody (lookup (funcName statement) state)) (getEnvironmentFromFuncall statement state) (lambda (statement state) (new-return (Mvalue (operand statement) state))) default-break default-continue default-throw))))
       (else (Mbool statement state)))))
 
 ; Mbool: Evaluate a statement for a truth value of #t or #f.
@@ -189,80 +205,138 @@
 
 ; HELPER METHODS
 
-;lookup gets the value for a given variable
-;takes a variable name and the state and returns the value of that variable
 (define lookup
   (lambda (var state)
-    (lookup-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
+    (cond
+      ((null? state) (error 'unknown (format "Variable ~a does not exist" var)))
+      ((varsContain var (variables state)) (lookupVal var (currentLayer state)))
+      (else (lookup var (nextLayers state))))))
 
-(define lookup-flattened
+(define lookupVal
   (lambda (var state)
     (cond
-      ((null? (variables state)) (error 'unknown (format "Variable ~a does not exist" var)))
       ((eq? (variable1 state) var) (valueOfVar1 state))
-      (else (lookup var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+      (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+
+;helpers for lookup
+(define nextLayers cdr)
+
+(define currentLayer car)
+
+(define variableList caar)
+
+;Mstate-funcall after the function is called
+(define Mstate-funcall
+  (lambda (funcall state return break continue throw)
+    (cond
+      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
+      (else (cons (currentLayer state) (Mstate-funcall funcall (newLayers state)))))))
+
+;helpers for Mstate-funcall
+(define globalStateOfEnvironment cdr)
+
+(define getFuncBody cadr)
+
+;getEnvirontment gets the environment within which a function call has access
+;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
+(define getEnvironmentFromFuncall
+  (lambda (funcall state)
+    (getEnvironment (name funcall) (getParamsFromState (name funcall) state) (paramValues funcall) state)))
+
+(define getEnvironment
+  (lambda (funName funParams funParamValues state)
+    (cons (getLocal funParams funParamValues state) (getGlobal funName state)))) 
+  
+;getGlobal gets the global variables for the environment
+(define getGlobal
+  (lambda (funName state)
+    (cond
+      ((varsContain funName (variables state)) state)
+      (else (getGlobal funName (nextLayers state))))))
+
+;getLocal get all of the local variable for the function which will be the parameters
+(define getLocal
+  (lambda (funParams paramValues state)
+    (getLocalWithFormat funParams paramValues state '(()()))))
+
+(define getLocalWithFormat
+  (lambda (funParams paramValues state localState)
+    (cond
+      ((null? funParams) localState)
+      (else (getLocalWithFormat (restOfParams funParams) (restOfParamValues paramValues) state (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state) (cons localState '()))))))))
+
+;helpers for getLocal
+(define restOfParams cdr)
+(define restOfParamValues cdr)
+(define currentParam car)
+(define currentParamValue car)
+
+;helpers for getEnvironment
+(define getParamsFromState
+  (lambda (funName state)
+    (car (lookup funName state))))
+
+(define name cadr)
+(define paramValues cddr)
 
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
 (define replace_var
   (lambda (var value state)
     (cond
-      ((null? (variables state)) state)
-      ((list? (outerLevelVariables state)) (cons (cons (variables (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
-                                                       (cons (variables (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '()))
-                                                 (cons (cons (valuesInState (replace_var var value (cons (outerLevelVariables state) (cons (outerLevelValues state) '()))))
-                                                       (cons (valuesInState (replace_var var value (cons (secondLevelVariables state) (cons (secondLevelValues state) '())))) '())) '())))
-      ((eq? (variable1 state) var) (cons (cons (variable1 state) (restOfVars state)) (cons (cons value (restOfValues state)) '())))
-      (else (cons (cons (variable1 state) (variables (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '())))))
-                  (cons (cons (valueOfVar1 state) (allValues (replace_var var value (cons (restOfVars state) (cons (restOfValues state) '()))))) '()))))))
+      ((varsContain var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
+      (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
+
+(define get_replaced
+  (lambda (var value state)
+    (cond
+      ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons value (restOfValues state)) '())))
+      (else (currentLayer (insert (variable1 state) (valueOfVar1 state) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
 
 ;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
 (define insert
   (lambda (var value state)
     (cond
-      ((null? state) (cons (cons var '()) (cons (car (cons (cons value state) '())) '())))
-      ((null? (variables state)) state)
       ((stateContains var state) (replace_var var value state))
-      ((list? (outerLevelVariables state)) (cons (cons (cons var (outerLevelVariables state)) (cons (secondLevelVariables state) '()))
-                                                 (cons (cons (cons value (outerLevelValues state)) (cons (secondLevelValues state) '())) '())))
-      (else (cons (cons var (variables state)) (cons (cons value (allValues state)) '()))))))
+      (else (cons (cons (cons var (variables state)) (cons (cons value (valuesInState state)) '())) (cdr state))))))
 
 ;createClosure creates a closure functon that will be added to the state
 ;the thirsd part of the cosure is the framework for the environment
 (define createClosure
   (lambda (params body)
-    (cons params (cons body '(((()())(()())))))))
+    (cons params (cons body emptyEnvironment))))
+
+(define emptyEnvironment '())
 
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
   (lambda (var state)
-    (stateContains-flattened var (cons (flatten (variables state)) (cons (flatten (valuesInState state)) '())))))
-
-(define stateContains-flattened
-  (lambda (var state)
     (cond
-      ((null? (variables state)) #f)
-      ((eq? (variable1 state) var) #t)
-      (else (stateContains var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+      ((null? state) #f)
+      ((varsContain var (variables state)) #t)
+      (else (stateContains var (nextLayers state))))))
 
-;flatten flattens out a list
-(define flatten
-  (lambda (l)
+(define varsContain
+  (lambda (var varList)
     (cond
-      ((null? l) '())
-      ((list? (car l)) (append (flatten (car l)) (flatten (cdr l))))
-      (else (cons (car l) (flatten (cdr l)))))))
+     ((null? varList) #f)
+     ((eq? var (var1 varList)) #t)
+     (else (varsContain var (cdr varList)))))) 
+
+;helper for state contains
+(define var1 car)
+
+(define resOfVariablesInState cdr)
 
 ;adds a level of scope to the given state
 (define addLevelOfScope
   (lambda (state)
-    (cons (cons '() (cons (car state) '())) (cons (cons '() (cons (cadr state) '())) '()))))
+    (cons '(()()) state)))
 
 ;remove the outer most level of scope
-(define getInnerScope
-  (lambda (state)
-    (cons (cadar state) (cons (cadadr state) '()))))
+(define getInnerScope cdr)
 
 ;gets the code inside the braces
 (define insideBraces cdr)
@@ -283,19 +357,19 @@
 (define operand2 caddr)
 
 ;variables in the state
-(define variables car)
+(define variables caar)
 
 ;values in the state
-(define valuesInState cadr)
+(define valuesInState cadar)
 
 ;outerLevelVariables gets the variables in the outer most scope
 (define outerLevelVariables caar)
 
 ;outerLevelValues gets the values in the outer most scope
-(define outerLevelValues caadr)
+(define outerLevelValues cadar)
 
 ;secondLevelVariables gets the variables in the outer most scope
-(define secondLevelVariables cadar)
+(define secondLevelVariables caadr)
 
 ;secondLevelValues gets the values in the outer most scope
 (define secondLevelValues cadadr)
@@ -313,7 +387,7 @@
 (define restOfValues cdadr)
 
 ;get the values in the state
-(define allValues cadr)
+(define allValues cadar)
 
 ;the expression in the stat of the program
 (define firstExpression car)
@@ -362,3 +436,10 @@
 (define finally cadddr)
 
 (define finallyExpressions cadr)
+
+;helper methods for Mstate-func
+(define funcName cadr)
+
+(define getParams caddr)
+
+(define getBody cadddr)
