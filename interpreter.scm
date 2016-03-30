@@ -67,6 +67,7 @@
                           (lambda (e s) (throw e (getInnerScope s))))))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
+      ((eq? (operator statement) 'funcall) (Mstate-funcall statement state break continue throw))
       ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
@@ -161,6 +162,9 @@
       ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) 'funcall) (call/cc
+                                            (lambda (new-return)
+                                              (do-interpret (getBody (lookup (funcName statement))) (getEnvironmentFromFuncall funcall state) new-return break continue throw))))
       (else (Mbool statement state)))))
 
 ; Mbool: Evaluate a statement for a truth value of #t or #f.
@@ -202,6 +206,16 @@
 (define currentLayer car)
 
 (define variableList caar)
+
+;Mstate-funcall after the function is called
+(define Mstate-funcall
+  (lambda (funcall state break continue throw)
+    (cond
+      ((varsContain var (variables state)) (globalStateOfEnvironment (do-interpret (getBody (lookup (funcName funcall))) (getEnvironmentFromFuncall funcall state) return break continue throw)))
+      (else (cons (currentLayer state) (Mstate-funcall funcall (newLayers state)))))))
+
+;helpers for Mstate-funcall
+(define globalStateOfEnvironment cdr)
 
 ;getEnvirontment gets the environment within which a function call has access
 ;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
