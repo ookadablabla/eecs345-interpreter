@@ -13,23 +13,26 @@
         (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
              (begin-interpret (parser filename) initial-state))))))
 
+; Interpret a file containing c code.
 (define new-interpret
   (lambda (filename)
     (call/cc
-     (lambda (return)
-       (do-interpret main
-                     (getEnvironmentFromFuncall (mainFuncall main) (do-interpret
-                                                      (parser filename)
-                                                      initial-state
-                                                      (lambda (statement state) (return state))
-                                                      default-break
-                                                      default-continue
-                                                      default-throw))
-                     (lambda (statement state) (return (Mvalue (operand statement) state)))
-                     default-break
-                      default-continue
-                      default-throw)))))
-       
+      (lambda (return)
+        (let ((begin-interpret (lambda (env) (do-interpret main
+                                                           env
+                                                           (lambda (statement env) (return (Mvalue (operand statement) env)))
+                                                           default-break
+                                                           default-continue
+                                                           default-throw))))
+              ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
+              ; of the program, containing function and global variable definitions.
+              (begin-interpret (getEnvironmentFromFuncall (mainFuncall main) (do-interpret (parser filename)
+                                                                                 initial-state
+                                                                                 (lambda (statement env) (return env))
+                                                                                 default-break
+                                                                                 default-continue
+                                                                                 default-throw))))))))
+
 (define main '((funcall main)))
 
 (define mainFuncall car)
@@ -54,38 +57,13 @@
   (lambda (statement state return break continue throw)
     (cond
       ((eq? (operator statement) '=) (Mstate-assignment statement state))
-      ((eq? (operator statement) 'begin) (Mstate-begin statement state return break continue throw))
+      ((eq? (operator statement) 'begin) (Mstate-begin (cdr statement) state return break continue throw))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
       ((eq? (operator statement) 'return) (return statement state))
       ((eq? (operator statement) 'throw) (throw (exception statement) state))
-      ((eq? (operator statement) 'try)
-        (if (null? (catch statement))
-          (Mstate-finally (finally statement)
-                          (addLevelOfScope (Mstate-try (try statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
-                                                                                     (lambda (s) (continue (getInnerScope s)))
-                                                                                     (lambda (e s) (throw e (getInnerScope s)))))
-                          return
-                          (lambda (s) (break (getInnerScope s)))
-                          (lambda (s) (continue (getInnerScope s)))
-                          (lambda (e s) (throw e (getInnerScope s))))
-          (Mstate-finally (finally statement)
-                          (addLevelOfScope
-                            (call/cc
-                              (lambda (new-throw)
-                                (Mstate-try (try statement) (addLevelOfScope state) return (lambda (s) (break (getInnerScope s)))
-                                                                                           (lambda (s) (continue (getInnerScope s)))
-                                                                                           (lambda (e s) (new-throw (Mstate-catch (catch-body (catch statement))
-                                                                                                                                  (insert (caadr (catch statement)) e (addLevelOfScope (getInnerScope s)))
-                                                                                                                                  return
-                                                                                                                                  (lambda (s) (break (getInnerScope s)))
-                                                                                                                                  (lambda (s) (continue (getInnerScope s)))
-                                                                                                                                  (lambda (e s) (throw e (getInnerScope s))))))))))
-                          return
-                          (lambda (s) (break (getInnerScope s)))
-                          (lambda (s) (continue (getInnerScope s)))
-                          (lambda (e s) (throw e (getInnerScope s))))))
+      ((eq? (operator statement) 'try) (Mstate-tcf statement state return break continue throw))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
       ((eq? (operator statement) 'funcall) (Mstate-funcall statement state return break continue throw))
@@ -95,32 +73,39 @@
             (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue throw))))
       (else (error 'unknown "Encountered an unknown statement")))))
 
-;Mstate-try handles try blocks
-(define Mstate-try
-  (lambda (try state return break continue throw)
-    (cond
-      ((null? try) (getInnerScope state))
-      (else (Mstate-try (restOfExpressions try) (Mstate (firstExpression try) state return break continue throw) return break continue throw)))))
 
-; Mstate-catch handles catch statements
-(define Mstate-catch
-  (lambda (catch state return break continue throw)
-    (if (null? catch)
-      (getInnerScope state)
-      (Mstate-catch (restOfExpressions catch) (Mstate (firstExpression catch) state return break continue throw) return break continue throw))))
+; Modify the state based on a try-catch-finally block.
+(define Mstate-tcf
+  (lambda (statement state return break continue throw)
+    (call/cc
+      (lambda (catch-continuation)
+        (letrec ((finally (lambda (s)
+                  (if (pair? (finally-stmt statement))
+                      (Mstate-begin (finally-body statement) s return break continue throw)
+                      s)))
+                (try (lambda (new-throw)
+                  ; if this try block is accompanied by a catch block, pass a continuation that
+                  ; jumps us to it when we encounter a throw. Otherwise, pass whatever throw continuation
+                  ; we were passed when we entered this try block.
+                  (if (pair? (catch-block statement))
+                    (finally (Mstate-begin (try-body statement) state return break continue new-throw))
+                    (finally (Mstate-begin (try-body statement) state return break continue throw)))))
+                (catch (lambda (e s)
+                  (finally (Mstate-begin (catch-body statement) (insert (catch-err statement) e s) return break continue throw)))))
+                (try (lambda (e s) (catch-continuation (catch e s)))))))))
 
-;Mstate-finally handles finally blocks
-(define Mstate-finally
-  (lambda (finally state return break continue throw)
-    (cond
-      ((null? finally) (getInnerScope state))
-      ((eq? (operator finally) 'finally) (Mstate-finally (finallyExpressions finally) state return break continue throw))
-      (else (Mstate-finally (restOfExpressions finally) (Mstate (firstExpression finally) state return break continue throw) return break continue throw)))))
+(define try-body cadr)
+(define catch-body (lambda (v) (caddr (caddr v))))
+(define catch-block caddr)
+(define catch-err (lambda (v) (car (cadr (caddr v)))))
+(define finally-stmt (lambda (t) (car (cdddr t))))
+(define finally-body (lambda (t) (cadr (car (cdddr t)))))
 
-; Mstate-begin handles begin statements
+; Whenever entering a block of code with curly braces, this function should be called to evaluate
+; the contents of the block inside a new layer of scope.
 (define Mstate-begin
   (lambda (statement state return break continue throw)
-    (getInnerScope (do-interpret (insideBraces statement)
+    (getInnerScope (do-interpret statement
                                  (addLevelOfScope state)
                                  return
                                  (lambda (s) (break (getInnerScope s)))
@@ -147,8 +132,8 @@
                     return
                     break
                     continue
-                    throw))
-      state))
+                    throw)
+      state)))
 
 ; MState-var handles variable declaration
 (define Mstate-var
@@ -158,7 +143,7 @@
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
       (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
-;Mstate-func handles function declorations
+;Mstate-func handles function declarations
 (define Mstate-func
   (lambda (statement state)
     (cond
@@ -173,15 +158,16 @@
 (define Mstate-funcall-with-originState
   (lambda (funcall state originState return break continue throw)
     (cond
-      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall originState) return break continue throw)))
-      (else (cons (currentLayer state) (Mstate-funcall-with-originState funcall (nextLayers state) originState return break continue throw))))))
+      ((env-contains-symbol? (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
+      (else (cons (currentLayer state) (Mstate-funcall funcall (nextLayers state) return break continue throw))))))
 
 ;helpers for Mstate-funcall
 (define globalStateOfEnvironment cdr)
 
 (define getFuncBody cadr)
 
-    
+(define getBody cadddr)
+
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
@@ -205,13 +191,14 @@
                                               (do-interpret (getFuncBody (lookup (funcName statement) state)) (getEnvironmentFromFuncall statement state) (lambda (statement state) (new-return (Mvalue (operand statement) state))) default-break default-continue default-throw))))
       (else (Mbool statement state)))))
 
-; Mbool: Evaluate a statement for a truth value of #t or #f.
+; Mbool: Evaluate a statement for a truth value of true or false.
 (define Mbool
   (lambda (statement state)
     (cond
       ((not (list? statement)) (Mvalue statement state))
       ((eq? statement 'true) 'true)
       ((eq? statement 'false) 'false)
+      ((not (list? statement)) (Mvalue statement state))
       ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
       ((eq? (comparator statement) '<) (if (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
       ((eq? (comparator statement) '>=) (if (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
@@ -230,7 +217,7 @@
   (lambda (var state)
     (cond
       ((null? state) (error 'unknown (format "Variable ~a does not exist" var)))
-      ((varsContain var (variables state)) (lookupVal var (currentLayer state)))
+      ((env-contains-symbol? var (variables state)) (lookupVal var (currentLayer state)))
       (else (lookup var (nextLayers state))))))
 
 (define lookupVal
@@ -247,7 +234,7 @@
 
 (define variableList caar)
 
-;getEnvirontment gets the environment within which a function call has access
+;getEnvironment gets the environment within which a function call has access
 ;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
 (define getEnvironmentFromFuncall
   (lambda (funcall state)
@@ -255,13 +242,13 @@
 
 (define getEnvironment
   (lambda (funName funParams funParamValues state)
-    (cons (getLocal funParams funParamValues state) (getGlobal funName state)))) 
-  
+    (cons (getLocal funParams funParamValues state) (getGlobal funName state))))
+
 ;getGlobal gets the global variables for the environment
 (define getGlobal
   (lambda (funName state)
     (cond
-      ((varsContain funName (variables state)) state)
+      ((env-contains-symbol? funName (variables state)) state)
       (else (getGlobal funName (nextLayers state))))))
 
 ;getLocal get all of the local variable for the function which will be the parameters
@@ -296,7 +283,7 @@
   (lambda (var value state)
     (cond
       ((null? state) (error 'out-of-scope (format "varaibel ~a is out of scope" var)))
-      ((varsContain var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
+      ((env-contains-symbol? var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
       (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
 
 (define get_replaced
@@ -330,15 +317,15 @@
   (lambda (var state)
     (cond
       ((null? state) #f)
-      ((varsContain var (variables state)) #t)
+      ((env-contains-symbol? var (variables state)) #t)
       (else (stateContains var (nextLayers state))))))
 
-(define varsContain
+(define env-contains-symbol?
   (lambda (var varList)
     (cond
      ((null? varList) #f)
      ((eq? var (var1 varList)) #t)
-     (else (varsContain var (cdr varList)))))) 
+     (else (env-contains-symbol? var (cdr varList))))))
 
 ;helper for state contains
 (define var1 car)
@@ -440,17 +427,6 @@
 (define insideBraces cdr)
 
 (define exception cadr)
-
-;Helpers for sending information to Mstate-try
-(define try cadr)
-
-(define catch caddr)
-
-(define catch-body caddr)
-
-(define finally cadddr)
-
-(define finallyExpressions cadr)
 
 ;helper methods for Mstate-func
 (define funcName cadr)
