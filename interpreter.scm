@@ -3,7 +3,7 @@
 ;
 ; This code was restructured using solution2.scm from Blackboard to better abstract certain
 ; functions and generally clean up Mstate.
-(load "simpleParser.scm")
+(load "functionParser.scm")
 
 ; Parse and begin evaluation of the file.
 (define interpret
@@ -13,22 +13,25 @@
         (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
              (begin-interpret (parser filename) initial-state))))))
 
+; Interpret a file containing c code.
 (define new-interpret
   (lambda (filename)
     (call/cc
-     (lambda (return)
-       (do-interpret main
-                     (getEnvironmentFromFuncall (mainFuncall main) (do-interpret
-                                                      (parser filename)
-                                                      initial-state
-                                                      (lambda (statement state) (return state))
-                                                      default-break
-                                                      default-continue
-                                                      default-throw))
-                     (lambda (statement state) (return (Mvalue (operand statement) state)))
-                     default-break
-                      default-continue
-                      default-throw)))))
+      (lambda (return)
+        (let ((begin-interpret (lambda (env) (do-interpret main
+                                                           env
+                                                           (lambda (statement env) (return (Mvalue (operand statement) env)))
+                                                           default-break
+                                                           default-continue
+                                                           default-throw))))
+              ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
+              ; of the program, containing function and global variable definitions.
+              (begin-interpret (getEnvironmentFromFuncall (mainFuncall main) (do-interpret (parser filename)
+                                                                                 initial-state
+                                                                                 (lambda (statement env) (return env))
+                                                                                 default-break
+                                                                                 default-continue
+                                                                                 default-throw))))))))
 
 (define main '((funcall main)))
 
@@ -70,8 +73,6 @@
             (Mstate-while (parse-while-condition statement) (parse-while-statement statement) state return new-break continue throw))))
       (else (error 'unknown "Encountered an unknown statement")))))
 
-(define finally-stmt (lambda (t) (car (cdddr t))))
-(define finally-body (lambda (t) (cadr (car (cdddr t)))))
 
 ; Modify the state based on a try-catch-finally block.
 (define Mstate-tcf
@@ -93,12 +94,12 @@
                   (finally (Mstate-begin (catch-body statement) (insert (catch-err statement) e s) return break continue throw)))))
                 (try (lambda (e s) (catch-continuation (catch e s)))))))))
 
-(define catch-block caddr)
-(define catch-body (lambda (v) (caddr (caddr v))))
 (define try-body cadr)
+(define catch-body (lambda (v) (caddr (caddr v))))
 (define catch-block caddr)
 (define catch-err (lambda (v) (car (cadr (caddr v)))))
-(define finally-body (lambda (v) (cadr (car (cdddr v)))))
+(define finally-stmt (lambda (t) (car (cdddr t))))
+(define finally-body (lambda (t) (cadr (car (cdddr t)))))
 
 ; Whenever entering a block of code with curly braces, this function should be called to evaluate
 ; the contents of the block inside a new layer of scope.
@@ -142,7 +143,7 @@
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
       (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
-;Mstate-func handles function declorations
+;Mstate-func handles function declarations
 (define Mstate-func
   (lambda (statement state)
     (cond
@@ -153,7 +154,7 @@
 (define Mstate-funcall
   (lambda (funcall state return break continue throw)
     (cond
-      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
+      ((env-contains-symbol? (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
       (else (cons (currentLayer state) (Mstate-funcall funcall (nextLayers state) return break continue throw))))))
 
 ;helpers for Mstate-funcall
@@ -190,9 +191,9 @@
 (define Mbool
   (lambda (statement state)
     (cond
-      ((not (list? statement)) (Mvalue statement state))
       ((eq? statement 'true) 'true)
       ((eq? statement 'false) 'false)
+      ((not (list? statement)) (Mvalue statement state))
       ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
       ((eq? (comparator statement) '<) (if (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
       ((eq? (comparator statement) '>=) (if (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
@@ -211,7 +212,7 @@
   (lambda (var state)
     (cond
       ((null? state) (error 'unknown (format "Variable ~a does not exist" var)))
-      ((varsContain var (variables state)) (lookupVal var (currentLayer state)))
+      ((env-contains-symbol? var (variables state)) (lookupVal var (currentLayer state)))
       (else (lookup var (nextLayers state))))))
 
 (define lookupVal
@@ -228,7 +229,7 @@
 
 (define variableList caar)
 
-;getEnvirontment gets the environment within which a function call has access
+;getEnvironment gets the environment within which a function call has access
 ;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
 (define getEnvironmentFromFuncall
   (lambda (funcall state)
@@ -242,7 +243,7 @@
 (define getGlobal
   (lambda (funName state)
     (cond
-      ((varsContain funName (variables state)) state)
+      ((env-contains-symbol? funName (variables state)) state)
       (else (getGlobal funName (nextLayers state))))))
 
 ;getLocal get all of the local variable for the function which will be the parameters
@@ -275,7 +276,7 @@
 (define replace_var
   (lambda (var value state)
     (cond
-      ((varsContain var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
+      ((env-contains-symbol? var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
       (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
 
 (define get_replaced
@@ -309,15 +310,15 @@
   (lambda (var state)
     (cond
       ((null? state) #f)
-      ((varsContain var (variables state)) #t)
+      ((env-contains-symbol? var (variables state)) #t)
       (else (stateContains var (nextLayers state))))))
 
-(define varsContain
+(define env-contains-symbol?
   (lambda (var varList)
     (cond
      ((null? varList) #f)
      ((eq? var (var1 varList)) #t)
-     (else (varsContain var (cdr varList))))))
+     (else (env-contains-symbol? var (cdr varList))))))
 
 ;helper for state contains
 (define var1 car)
@@ -419,16 +420,6 @@
 (define insideBraces cdr)
 
 (define exception cadr)
-
-;Helpers for sending information to Mstate-try
-(define try cadr)
-
-(define catch caddr)
-
-
-(define finally cadddr)
-
-(define finallyExpressions cadr)
 
 ;helper methods for Mstate-func
 (define funcName cadr)
