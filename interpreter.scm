@@ -205,6 +205,7 @@
 (define Mbool
   (lambda (statement state)
     (cond
+      ((not (list? statement)) (Mvalue statement state))
       ((eq? statement 'true) 'true)
       ((eq? statement 'false) 'false)
       ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
@@ -267,6 +268,7 @@
 (define getLocalWithFormat
   (lambda (funParams paramValues state localState)
     (cond
+      ((and (null? funParams) (not (null? paramValues))) (error 'unknown (format "too many parameters")))
       ((null? funParams) localState)
       (else (getLocalWithFormat (restOfParams funParams) (restOfParamValues paramValues) state (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state) (cons localState '()))))))))
 
@@ -289,6 +291,7 @@
 (define replace_var
   (lambda (var value state)
     (cond
+      ((null? state) (error 'out-of-scope (format "varaibel ~a is out of scope" var)))
       ((varsContain var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
       (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
 
