@@ -13,6 +13,25 @@
         (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
              (begin-interpret (parser filename) initial-state))))))
 
+(define new-interpret
+  (lambda (filename)
+    (call/cc
+     (lambda (return)
+       (do-interpret '((funcall main))
+                     (do-interpret
+                      (parser filename)
+                      initial-state
+                      (lambda (statement state) (return state))
+                      default-break
+                      default-continue
+                      default-throw)
+                     (lambda (statement state) (return (Mvalue (operand statement) state)))
+                     default-break
+                      default-continue
+                      default-throw)))))
+       
+
+
 ; do-interpret recursively evaluates statements and modifies the state appropriately
 ; based on their contents.
 (define do-interpret
@@ -37,7 +56,7 @@
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
-      ((eq? (operator statement) 'return) (return (Mvalue (operand statement) state)))
+      ((eq? (operator statement) 'return) (return statement state))
       ((eq? (operator statement) 'throw) (throw (exception statement) state))
       ((eq? (operator statement) 'try)
         (if (null? (catch statement))
@@ -67,7 +86,7 @@
                           (lambda (e s) (throw e (getInnerScope s))))))
       ((eq? (operator statement) 'var) (Mstate-var statement state))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
-      ((eq? (operator statement) 'funcall) (Mstate-funcall statement state break continue throw))
+      ((eq? (operator statement) 'funcall) (Mstate-funcall statement state return break continue throw))
       ((eq? (operator statement) 'while)
         (call/cc
           (lambda (new-break)
@@ -164,7 +183,7 @@
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) 'funcall) (call/cc
                                             (lambda (new-return)
-                                              (do-interpret (getBody (lookup (funcName statement))) (getEnvironmentFromFuncall funcall state) new-return break continue throw))))
+                                              (do-interpret (getFuncBody (lookup (funcName statement) state)) (getEnvironmentFromFuncall statement state) (lambda (statement state) (new-return (Mvalue (operand statement) state))) default-break default-continue default-throw))))
       (else (Mbool statement state)))))
 
 ; Mbool: Evaluate a statement for a truth value of #t or #f.
@@ -209,13 +228,15 @@
 
 ;Mstate-funcall after the function is called
 (define Mstate-funcall
-  (lambda (funcall state break continue throw)
+  (lambda (funcall state return break continue throw)
     (cond
-      ((varsContain var (variables state)) (globalStateOfEnvironment (do-interpret (getBody (lookup (funcName funcall))) (getEnvironmentFromFuncall funcall state) return break continue throw)))
+      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
       (else (cons (currentLayer state) (Mstate-funcall funcall (newLayers state)))))))
 
 ;helpers for Mstate-funcall
 (define globalStateOfEnvironment cdr)
+
+(define getFuncBody cadr)
 
 ;getEnvirontment gets the environment within which a function call has access
 ;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
