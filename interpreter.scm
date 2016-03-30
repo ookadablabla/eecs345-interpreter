@@ -261,7 +261,7 @@
 (define getLocalWithFormat
   (lambda (funParams paramValues state localState)
     (cond
-      ((and (null? funParams) (not (null? paramValues))) (error 'unknown (format "too many parameters")))
+      ((and (null? funParams) (not (null? paramValues))) (error 'invalid (format "too many parameters")))
       ((null? funParams) localState)
       (else (getLocalWithFormat (restOfParams funParams) (restOfParamValues paramValues) state (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state) (cons localState '()))))))))
 
