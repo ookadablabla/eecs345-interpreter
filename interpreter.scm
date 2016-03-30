@@ -168,9 +168,13 @@
 ;Mstate-funcall after the function is called
 (define Mstate-funcall
   (lambda (funcall state return break continue throw)
+    (Mstate-funcall-with-originState funcall state state return break continue throw)))
+
+(define Mstate-funcall-with-originState
+  (lambda (funcall state originState return break continue throw)
     (cond
-      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
-      (else (cons (currentLayer state) (Mstate-funcall funcall (nextLayers state) return break continue throw))))))
+      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall originState) return break continue throw)))
+      (else (cons (currentLayer state) (Mstate-funcall-with-originState funcall (nextLayers state) originState return break continue throw))))))
 
 ;helpers for Mstate-funcall
 (define globalStateOfEnvironment cdr)

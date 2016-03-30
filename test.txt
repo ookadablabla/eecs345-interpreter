@@ -1,18 +1,27 @@
-function f(x) {
-  function g(x) {
-    var b;
-    b = x;
-    return 0;
-  }
-
-  function h(x) {
-    b = x;
-    return 1;
-  }
-
-  return g(x) + h(x);
-}
-
 function main() {
-  return f(10);
+  var result;
+  var base;
+
+  function getpow(a) {
+     var x;
+
+     function setanswer(n) {
+        result = n;
+     }
+
+     function recurse(m) {
+       if (m > 0) {
+         x = x * base;
+         recurse(m-1);
+       }
+       else
+         setanswer(x);
+     }
+
+     x = 1;
+     recurse(a);
+  }
+  base = 2;
+  getpow(6);
+  return result;
 }
