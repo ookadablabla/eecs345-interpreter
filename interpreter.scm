@@ -211,7 +211,7 @@
 
 (define getEnvironment
   (lambda (funName funParams funParamValues state)
-    (cons (getLocal funParams funParamValues state) (cons (getGlobal funName state))))) 
+    (cons (getLocal funParams funParamValues state) (getGlobal funName state)))) 
   
 ;getGlobal gets the global variables for the environment
 (define getGlobal
@@ -271,7 +271,9 @@
 ;the thirsd part of the cosure is the framework for the environment
 (define createClosure
   (lambda (params body)
-    (cons params (cons body '(((()())(()())))))))
+    (cons params (cons body emptyEnvironment))))
+
+(define emptyEnvironment '())
 
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
