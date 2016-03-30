@@ -1,11 +1,10 @@
-var x = 1;
-var y = 10;
-var r = 50;
+function minmax(a, b, min) {
+  if (min && a < b || !min && a > b)
+    return true;
+  else
+    return false;
+}
 
 function main() {
-  while (x < y) {
-     r = r + x;
-     x = x + 1;
-  }
-  return r;
+  return (minmax(10, 100, true) && minmax(5, 3, false));
 }

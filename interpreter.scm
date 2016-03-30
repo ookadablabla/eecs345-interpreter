@@ -17,20 +17,22 @@
   (lambda (filename)
     (call/cc
      (lambda (return)
-       (do-interpret '((funcall main))
-                     (do-interpret
-                      (parser filename)
-                      initial-state
-                      (lambda (statement state) (return state))
-                      default-break
-                      default-continue
-                      default-throw)
+       (do-interpret main
+                     (getEnvironmentFromFuncall (mainFuncall main) (do-interpret
+                                                      (parser filename)
+                                                      initial-state
+                                                      (lambda (statement state) (return state))
+                                                      default-break
+                                                      default-continue
+                                                      default-throw))
                      (lambda (statement state) (return (Mvalue (operand statement) state)))
                      default-break
                       default-continue
                       default-throw)))))
        
+(define main '((funcall main)))
 
+(define mainFuncall car)
 
 ; do-interpret recursively evaluates statements and modifies the state appropriately
 ; based on their contents.
@@ -152,7 +154,7 @@
 (define Mstate-var
   (lambda (statement state)
     (cond
-      ((stateContains (variable statement) state) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
+      ;((stateContains (variable statement) state) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
       (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
 
@@ -162,11 +164,24 @@
     (cond
       ((stateContains (funcName statement) state) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) state)))))
+
+;Mstate-funcall after the function is called
+(define Mstate-funcall
+  (lambda (funcall state return break continue throw)
+    (cond
+      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
+      (else (cons (currentLayer state) (Mstate-funcall funcall (nextLayers state) return break continue throw))))))
+
+;helpers for Mstate-funcall
+(define globalStateOfEnvironment cdr)
+
+(define getFuncBody cadr)
+
     
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement state)
-    (insert (variable statement) (Mvalue (operation statement) state) state)))
+    (replace_var (variable statement) (Mvalue (operation statement) state) state)))
 
 ; Mvalue: Evaluate an expression to determine its value.
 (define Mvalue
@@ -198,6 +213,7 @@
       ((eq? (comparator statement) '<=) (if (<= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
       ((eq? (comparator statement) '==) (if (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
       ((eq? (comparator statement) '!=) (if (not (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))) 'true 'false))
+      ((eq? (comparator statement) 'funcall) (Mvalue statement state))
       ((eq? (operator statement) '&&) (if (eq? #t (and (eq? 'true (Mbool (operand1 statement) state)) (eq? 'true (Mbool (operand2 statement) state)))) 'true 'false))
       ((eq? (operator statement) '||) (if (eq? #t (or (eq? 'true (Mbool (operand1 statement) state)) (eq? 'true (Mbool (operand2 statement) state)))) 'true 'false))
       ((eq? (operator statement) '!) (if (eq? #t (not (eq? 'true (Mbool (operand1 statement) state)))) 'true 'false))
@@ -225,18 +241,6 @@
 (define currentLayer car)
 
 (define variableList caar)
-
-;Mstate-funcall after the function is called
-(define Mstate-funcall
-  (lambda (funcall state return break continue throw)
-    (cond
-      ((varsContain (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) (getEnvironmentFromFuncall funcall state) return break continue throw)))
-      (else (cons (currentLayer state) (Mstate-funcall funcall (newLayers state)))))))
-
-;helpers for Mstate-funcall
-(define globalStateOfEnvironment cdr)
-
-(define getFuncBody cadr)
 
 ;getEnvirontment gets the environment within which a function call has access
 ;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
@@ -296,11 +300,15 @@
 
 ;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
-(define insert
+(define insert-old
   (lambda (var value state)
     (cond
       ((stateContains var state) (replace_var var value state))
       (else (cons (cons (cons var (variables state)) (cons (cons value (valuesInState state)) '())) (cdr state))))))
+
+(define insert
+  (lambda (var value state)
+    (cons (cons (cons var (variables state)) (cons (cons value (valuesInState state)) '())) (cdr state))))
 
 ;createClosure creates a closure functon that will be added to the state
 ;the thirsd part of the cosure is the framework for the environment
