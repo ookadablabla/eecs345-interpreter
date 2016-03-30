@@ -1,11 +1,7 @@
-function main() {
-  function h() {
-    return 10;
-  }
 
-  function g() {
-    return 100;
-  }
+var x = 4;
+var y = 6 + x;
 
-  return g(a) - h(b);
+function main(a) {
+  return x + y;
 }
