@@ -5,36 +5,20 @@
 ; functions and generally clean up Mstate.
 (load "functionParser.scm")
 
-; Parse and begin evaluation of the file.
+; Interpret a file containing c code.
 (define interpret
   (lambda (filename)
     (call/cc
       (lambda (return)
-        (let ((begin-interpret (lambda (statement state) (do-interpret statement state return default-break default-continue default-throw))))
-             (begin-interpret (parser filename) initial-state))))))
+        (let* ((initial-return (lambda (statement env) (return (Mvalue (operand statement) env))))
+               (outer-environment (do-interpret (parser filename) initial-env (lambda (statement env) (return env)) default-break default-continue default-throw))
+               (begin-interpret (lambda (env) (do-interpret main env initial-return default-break default-continue default-throw))))
 
-; Interpret a file containing c code.
-(define new-interpret
-  (lambda (filename)
-    (call/cc
-      (lambda (return)
-        (let ((begin-interpret (lambda (env) (do-interpret main
-                                                           env
-                                                           (lambda (statement env) (return (Mvalue (operand statement) env)))
-                                                           default-break
-                                                           default-continue
-                                                           default-throw))))
               ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
               ; of the program, containing function and global variable definitions.
-              (begin-interpret (getEnvironmentFromFuncall (mainFuncall main) (do-interpret (parser filename)
-                                                                                 initial-state
-                                                                                 (lambda (statement env) (return env))
-                                                                                 default-break
-                                                                                 default-continue
-                                                                                 default-throw))))))))
+              (begin-interpret (getEnvironmentFromFuncall (mainFuncall main) outer-environment)))))))
 
 (define main '((funcall main)))
-
 (define mainFuncall car)
 
 ; do-interpret recursively evaluates statements and modifies the state appropriately
@@ -47,7 +31,7 @@
                     (Mstate (firstExpression statement) state return break continue throw)
                     return break continue throw))))
 
-(define initial-state '(((true false) (true false))))
+(define initial-env '(((true false) (true false))))
 (define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
 (define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
 (define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
@@ -188,10 +172,15 @@
       ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (operator statement) 'funcall) (call/cc
-                                            (lambda (new-return)
-                                              (do-interpret (getFuncBody (lookup (funcName statement) state)) (getEnvironmentFromFuncall statement state) (lambda (statement state) (new-return (Mvalue (operand statement) state))) default-break default-continue default-throw))))
+      ((eq? (operator statement) 'funcall) (Mvalue-funcall statement state))
       (else (Mbool statement state)))))
+
+(define Mvalue-funcall
+  (lambda (statement state)
+    (call/cc
+      (lambda (new-return)
+        (let (()))
+        (do-interpret (getFuncBody (lookup (funcName statement) state)) (getEnvironmentFromFuncall statement state) (lambda (statement state) (new-return (Mvalue (operand statement) state))) default-break default-continue default-throw)))))
 
 ; Mbool: Evaluate a statement for a truth value of true or false.
 (define Mbool
