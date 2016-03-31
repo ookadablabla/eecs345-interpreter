@@ -288,7 +288,7 @@
 (define lookupVal
   (lambda (var state)
     (cond
-      ((eq? (variable1 state) var) (valueOfVar1 state))
+      ((eq? (variable1 state) var) (unbox (valueOfVar1 state)))
       (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
 
 
@@ -299,32 +299,26 @@
 
 (define variableList caar)
 
-;remove removes a variable from the state
+; remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
 (define replace_var
   (lambda (var value state)
     (cond
-      ((null? state) (error 'out-of-scope (format "varaibel ~a is out of scope" var)))
+      ((null? state) (error 'out-of-scope (format "variable ~a is out of scope" var)))
       ((env-contains-symbol? var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
       (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
 
 (define get_replaced
   (lambda (var value state)
     (cond
-      ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons value (restOfValues state)) '())))
+      ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons (begin (set-box! (valueOfVar1 state) value) (valueOfVar1 state)) (restOfValues state)) '())))
       (else (currentLayer (insert (variable1 state) (valueOfVar1 state) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
 
 ;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
-(define insert-old
-  (lambda (var value state)
-    (cond
-      ((stateContains var state) (replace_var var value state))
-      (else (cons (cons (cons var (variables state)) (cons (cons value (valuesInState state)) '())) (cdr state))))))
-
 (define insert
   (lambda (var value state)
-    (cons (cons (cons var (variables state)) (cons (cons value (valuesInState state)) '())) (cdr state))))
+    (cons (cons (cons var (variables state)) (cons (cons (box value) (valuesInState state)) '())) (cdr state))))
 
 ;createClosure creates a closure functon that will be added to the state
 ;the thirsd part of the cosure is the framework for the environment
@@ -369,11 +363,11 @@
 ;operator
 (define operator car)
 
-; operand
-(define operand operand1)
-
 ;operand1
 (define operand1 cadr)
+
+; operand
+(define operand operand1)
 
 ;operand2
 (define operand2 caddr)
