@@ -10,13 +10,13 @@
   (lambda (filename)
     (call/cc
       (lambda (return)
-        (let* ((initial-return (lambda (statement env) (return (Mvalue (operand statement) env))))
+        (let* ((initial-return (lambda (statement env) (return (Mvalue (operand statement) env return default-break default-continue default-throw))))
                (outer-environment (do-interpret (parser filename) initial-env (lambda (statement env) (return env)) default-break default-continue default-throw))
-               (begin-interpret (lambda (env) (do-interpret main env initial-return default-break default-continue default-throw))))
+               (begin-interpret (lambda (env) (Mvalue-funcall (mainFuncall main) env initial-return default-break default-continue default-throw))))
 
               ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
               ; of the program, containing function and global variable definitions.
-              (begin-interpret (getEnvironmentFromFuncall (mainFuncall main) outer-environment)))))))
+              (begin-interpret (getFunctionExecutionEnvironment (mainFuncall main) outer-environment)))))))
 
 (define main '((funcall main)))
 (define mainFuncall car)
@@ -40,7 +40,7 @@
 (define Mstate
   (lambda (statement state return break continue throw)
     (cond
-      ((eq? (operator statement) '=) (Mstate-assignment statement state))
+      ((eq? (operator statement) '=) (Mstate-assignment statement state return break continue throw))
       ((eq? (operator statement) 'begin) (Mstate-begin (cdr statement) state return break continue throw))
       ((eq? (operator statement) 'break) (break state))
       ((eq? (operator statement) 'continue) (continue state))
@@ -48,7 +48,7 @@
       ((eq? (operator statement) 'return) (return statement state))
       ((eq? (operator statement) 'throw) (throw (exception statement) state))
       ((eq? (operator statement) 'try) (Mstate-tcf statement state return break continue throw))
-      ((eq? (operator statement) 'var) (Mstate-var statement state))
+      ((eq? (operator statement) 'var) (Mstate-var statement state return break continue throw))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
       ((eq? (operator statement) 'funcall) (Mstate-funcall statement state return break continue throw))
       ((eq? (operator statement) 'while)
@@ -100,14 +100,14 @@
 (define Mstate-if
   (lambda (statement state return break continue throw)
     (cond
-      ((eq? 'true (Mbool (if-condition statement) state)) (Mstate (if-statement statement) state return break continue throw))
+      ((eq? 'true (Mbool (if-condition statement) state return break continue throw)) (Mstate (if-statement statement) state return break continue throw))
       ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break continue throw))
       (else state))))
 
 ; Mstate-while handles while loops
 (define Mstate-while
   (lambda (condition statement state return break continue throw)
-    (if (eq? 'true (Mbool condition state))
+    (if (eq? 'true (Mbool condition state return break continue throw))
       (Mstate-while condition
                     statement
                     (call/cc
@@ -121,11 +121,11 @@
 
 ; MState-var handles variable declaration
 (define Mstate-var
-  (lambda (statement state)
+  (lambda (statement state r b c t)
     (cond
       ;((stateContains (variable statement) state) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
-      (else (insert (variable statement) (Mvalue (operation statement) state) state)))))
+      (else (insert (variable statement) (Mvalue (operation statement) state r b c t) state)))))
 
 ;Mstate-func handles function declarations
 (define Mstate-func
@@ -134,100 +134,88 @@
       ((stateContains (funcName statement) state) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) state)))))
 
-;Mstate-funcall after the function is called
-(define Mstate-funcall
-  (lambda (funcall state return break continue throw)
-    (Mstate-funcall-with-originState funcall state state return break continue throw)))
-
-(define Mstate-funcall-with-originState
-  (lambda (funcall state originState return break continue throw)
-    (cond
-      ((env-contains-symbol? (funcName funcall) (variables state)) (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state)) ((getFuncEnvironment (lookup (funcName funcall) state)) funcall originState) return break continue throw)))
-      (else (cons (currentLayer state) (Mstate-funcall-with-originState funcall (nextLayers state) originState return break continue throw))))))
-
-;helpers for Mstate-funcall
-(define globalStateOfEnvironment cdr)
-
-(define getFuncBody cadr)
-
-(define getFuncEnvironment caddr)
-
+;helper methods for Mstate-func
+(define funcName cadr)
+(define getParams caddr)
 (define getBody cadddr)
 
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
-  (lambda (statement state)
-    (replace_var (variable statement) (Mvalue (operation statement) state) state)))
+  (lambda (statement state r b c t)
+    (replace_var (variable statement) (Mvalue (operation statement) state r b c t) state)))
 
 ; Mvalue: Evaluate an expression to determine its value.
+; Last params are return break continue throw. Shortened for brevity.
 (define Mvalue
-  (lambda (statement state)
+  (lambda (statement state r b c t)
     (cond
       ((number? statement) statement)
       ((not (list? statement)) (lookup statement state))
-      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
+      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
       ((eq? (operator statement) '-) (if (null? (cddr statement))
-                                         (- (Mvalue (operand1 statement) state)) ; unary "-"
-                                         (- (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))))
-      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)))
-      ((eq? (operator statement) 'funcall) (Mvalue-funcall statement state))
-      (else (Mbool statement state)))))
+                                         (- (Mvalue (operand1 statement) state r b c t)) ; unary "-"
+                                         (- (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t))))
+      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
+      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
+      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
+      ((eq? (operator statement) 'funcall) (Mvalue-funcall statement state r b c t))
+      (else (Mbool statement state return break continue throw)))))
 
-(define Mvalue-funcall
-  (lambda (statement state)
+;Mstate-funcall after the function is called
+(define Mstate-funcall
+  (lambda (funcall state return break continue throw)
     (call/cc
       (lambda (new-return)
-        (let (()))
-        (do-interpret (getFuncBody (lookup (funcName statement) state)) (getEnvironmentFromFuncall statement state) (lambda (statement state) (new-return (Mvalue (operand statement) state))) default-break default-continue default-throw)))))
+        (let* ((func-name (funcName funcall))
+               (function (lookup func-name state)))
+              (do-interpret (getFuncBody function)
+                            (getFunctionExecutionEnvironment funcall state)
+                            (lambda (statement state) (new-return state))
+                            break
+                            continue
+                            throw))))))
 
-; Mbool: Evaluate a statement for a truth value of true or false.
-(define Mbool
-  (lambda (statement state)
-    (cond
-      ((not (list? statement)) (Mvalue statement state))
-      ((eq? statement 'true) 'true)
-      ((eq? statement 'false) 'false)
-      ((not (list? statement)) (Mvalue statement state))
-      ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
-      ((eq? (comparator statement) '<) (if (< (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
-      ((eq? (comparator statement) '>=) (if (>= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
-      ((eq? (comparator statement) '<=) (if (<= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
-      ((eq? (comparator statement) '==) (if (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state)) 'true 'false))
-      ((eq? (comparator statement) '!=) (if (not (= (Mvalue (operand1 statement) state) (Mvalue (operand2 statement) state))) 'true 'false))
-      ((eq? (comparator statement) 'funcall) (Mvalue statement state))
-      ((eq? (operator statement) '&&) (if (eq? #t (and (eq? 'true (Mbool (operand1 statement) state)) (eq? 'true (Mbool (operand2 statement) state)))) 'true 'false))
-      ((eq? (operator statement) '||) (if (eq? #t (or (eq? 'true (Mbool (operand1 statement) state)) (eq? 'true (Mbool (operand2 statement) state)))) 'true 'false))
-      ((eq? (operator statement) '!) (if (eq? #t (not (eq? 'true (Mbool (operand1 statement) state)))) 'true 'false))
-      (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
+    ;(Mstate-funcall-with-originState funcall state state return break continue throw)))
 
-; HELPER METHODS
+;(define Mstate-funcall-with-originState
+;  (lambda (funcall state originState return break continue throw)
+;    (if (env-contains-symbol? (funcName funcall) (variables state))
+;      (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state))
+;                                              ((getFuncEnvironment (lookup (funcName funcall) state)) funcall originState)
+;                                              return break continue throw))
+;      (else (cons (currentLayer state) (Mstate-funcall-with-originState funcall (nextLayers state) originState return break continue throw))))))
 
-(define lookup
-  (lambda (var state)
-    (cond
-      ((null? state) (error 'unknown (format "Variable ~a does not exist" var)))
-      ((env-contains-symbol? var (variables state)) (lookupVal var (currentLayer state)))
-      (else (lookup var (nextLayers state))))))
+;helpers for Mstate-funcall
+(define globalStateOfEnvironment cdr)
+(define getFuncBody cadr)
+(define getFuncEnvironment caddr)
+(define getBody cadddr)
 
-(define lookupVal
-  (lambda (var state)
-    (cond
-      ((eq? (variable1 state) var) (valueOfVar1 state))
-      (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+; When a function is called, Mvalue-funcall does the following:
+; 1. Creates the function's execution environment using the environment function stored
+;    in the function closure
+; 2. Binds the actual parameters to the formal parameters in the new environment
+; 3. Evaluates the body of the function.
+;
+; Differing
+; Execute a function and return the value produced by its return statement.
+; TODO: Match env-contains-symbol? check from Mstate-funcall
+(define Mvalue-funcall
+  (lambda (statement state return break continue throw)
+    (call/cc
+      (lambda (new-return)
+        (let* ((func-name (funcName statement))
+               (function (lookup func-name state)))
+              (do-interpret (getFuncBody function)
+                            (getFunctionExecutionEnvironment statement state)
+                            (lambda (statement state) (new-return (Mvalue (operand statement) state return break continue throw)))
+                            break
+                            continue
+                            throw))))))
 
-
-;helpers for lookup
-(define nextLayers cdr)
-
-(define currentLayer car)
-
-(define variableList caar)
-
-;getEnvironment gets the environment within which a function call has access
-;assumes funcall is of format (funcall 'method name' variable1 variable2 ... variableN)
-(define getEnvironmentFromFuncall
+; getEnvironment gets the environment within which a function call has access
+; Assumes funcall is of format (funcall methodName actual-param-1 actual-param-2 ...)
+(define getFunctionExecutionEnvironment
   (lambda (funcall state)
     (getEnvironment (name funcall) (getParamsFromState (name funcall) state) (paramValues funcall) state)))
 
@@ -268,6 +256,49 @@
 (define name cadr)
 (define paramValues cddr)
 
+; Mbool: Evaluate a statement for a truth value of true or false.
+(define Mbool
+  (lambda (statement state r b c t)
+    (cond
+      ((not (list? statement)) (Mvalue statement state r b c t))
+      ((eq? statement 'true) 'true)
+      ((eq? statement 'false) 'false)
+      ((not (list? statement)) (Mvalue statement state r b c t))
+      ((eq? (comparator statement) '>) (if (> (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '<) (if (< (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '>=) (if (>= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '<=) (if (<= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '==) (if (= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)) 'true 'false))
+      ((eq? (comparator statement) '!=) (if (not (= (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t))) 'true 'false))
+      ((eq? (comparator statement) 'funcall) (Mvalue statement state r b c t))
+      ((eq? (operator statement) '&&) (if (eq? #t (and (eq? 'true (Mbool (operand1 statement) state r b c t)) (eq? 'true (Mbool (operand2 statement) state r b c t)))) 'true 'false))
+      ((eq? (operator statement) '||) (if (eq? #t (or (eq? 'true (Mbool (operand1 statement) state r b c t)) (eq? 'true (Mbool (operand2 statement) state r b c t)))) 'true 'false))
+      ((eq? (operator statement) '!) (if (eq? #t (not (eq? 'true (Mbool (operand1 statement) state r b c t)))) 'true 'false))
+      (else (error 'invalidInput "This expression cannot be evaluated to a boolean value")))))
+
+; HELPER METHODS
+
+(define lookup
+  (lambda (var state)
+    (cond
+      ((null? state) (error 'unknown (format "Symbol ~a does not exist" var)))
+      ((env-contains-symbol? var (variables state)) (lookupVal var (currentLayer state)))
+      (else (lookup var (nextLayers state))))))
+
+(define lookupVal
+  (lambda (var state)
+    (cond
+      ((eq? (variable1 state) var) (valueOfVar1 state))
+      (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
+
+
+;helpers for lookup
+(define nextLayers cdr)
+
+(define currentLayer car)
+
+(define variableList caar)
+
 ;remove removes a variable from the state
 ; it takes the variable name and the state and removes it from the state
 (define replace_var
@@ -299,7 +330,7 @@
 ;the thirsd part of the cosure is the framework for the environment
 (define createClosure
   (lambda (params body)
-    (cons params (cons body (cons getEnvironmentFromFuncall '())))))
+    (cons params (cons body (cons getFunctionExecutionEnvironment '())))))
 
 ;stateContains? checks if the variable has already been declared in the state
 (define stateContains
@@ -339,7 +370,7 @@
 (define operator car)
 
 ; operand
-(define operand cadr)
+(define operand operand1)
 
 ;operand1
 (define operand1 cadr)
@@ -416,10 +447,3 @@
 (define insideBraces cdr)
 
 (define exception cadr)
-
-;helper methods for Mstate-func
-(define funcName cadr)
-
-(define getParams caddr)
-
-(define getBody cadddr)
