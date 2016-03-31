@@ -16,7 +16,7 @@
 
               ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
               ; of the program, containing function and global variable definitions.
-              (begin-interpret (getFunctionExecutionEnvironment (mainFuncall main) outer-environment)))))))
+              (begin-interpret (getFunctionExecutionEnvironment (mainFuncall main) outer-environment initial-return default-break default-continue default-throw)))))))
 
 (define main '((funcall main)))
 (define mainFuncall car)
@@ -159,7 +159,7 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
       ((eq? (operator statement) 'funcall) (Mvalue-funcall statement state r b c t))
-      (else (Mbool statement state return break continue throw)))))
+      (else (Mbool statement state r b c t)))))
 
 ;Mstate-funcall after the function is called
 (define Mstate-funcall
@@ -169,7 +169,7 @@
         (let* ((func-name (funcName funcall))
                (function (lookup func-name state)))
               (do-interpret (getFuncBody function)
-                            (getFunctionExecutionEnvironment funcall state)
+                            (getFunctionExecutionEnvironment funcall state return break continue throw)
                             (lambda (statement state) (new-return state))
                             break
                             continue
@@ -207,7 +207,7 @@
         (let* ((func-name (funcName statement))
                (function (lookup func-name state)))
               (do-interpret (getFuncBody function)
-                            (getFunctionExecutionEnvironment statement state)
+                            (getFunctionExecutionEnvironment statement state return break continue throw)
                             (lambda (statement state) (new-return (Mvalue (operand statement) state return break continue throw)))
                             break
                             continue
@@ -216,12 +216,12 @@
 ; getEnvironment gets the environment within which a function call has access
 ; Assumes funcall is of format (funcall methodName actual-param-1 actual-param-2 ...)
 (define getFunctionExecutionEnvironment
-  (lambda (funcall state)
-    (getEnvironment (name funcall) (getParamsFromState (name funcall) state) (paramValues funcall) state)))
+  (lambda (funcall state r b c t)
+    (getEnvironment (name funcall) (getParamsFromState (name funcall) state) (paramValues funcall) state r b c t)))
 
 (define getEnvironment
-  (lambda (funName funParams funParamValues state)
-    (cons (getLocal funParams funParamValues state) (getGlobal funName state))))
+  (lambda (funName funParams funParamValues state r b c t)
+    (cons (getLocal funParams funParamValues state r b c t) (getGlobal funName state))))
 
 ;getGlobal gets the global variables for the environment
 (define getGlobal
@@ -232,15 +232,19 @@
 
 ;getLocal get all of the local variable for the function which will be the parameters
 (define getLocal
-  (lambda (funParams paramValues state)
-    (getLocalWithFormat funParams paramValues state '(()()))))
+  (lambda (funParams paramValues state r b c t)
+    (getLocalWithFormat funParams paramValues state '(()()) r b c t)))
 
 (define getLocalWithFormat
-  (lambda (funParams paramValues state localState)
+  (lambda (funParams paramValues state localState r b c t)
     (cond
       ((and (null? funParams) (not (null? paramValues))) (error 'invalid (format "too many parameters")))
       ((null? funParams) localState)
-      (else (getLocalWithFormat (restOfParams funParams) (restOfParamValues paramValues) state (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state) (cons localState '()))))))))
+      (else (getLocalWithFormat (restOfParams funParams)
+                                (restOfParamValues paramValues)
+                                state
+                                (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state r b c t) (cons localState '())))
+                                r b c t)))))
 
 ;helpers for getLocal
 (define restOfParams cdr)
@@ -312,7 +316,7 @@
   (lambda (var value state)
     (cond
       ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons (begin (set-box! (valueOfVar1 state) value) (valueOfVar1 state)) (restOfValues state)) '())))
-      (else (currentLayer (insert (variable1 state) (valueOfVar1 state) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
+      (else (currentLayer (insert (variable1 state) (unbox (valueOfVar1 state)) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
 
 ;insert inerts a variable into the state, if the value already exists it replaces it
 ;returns the state with a given variable and value added in
