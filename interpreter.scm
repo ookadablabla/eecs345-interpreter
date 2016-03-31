@@ -150,6 +150,8 @@
   (lambda (statement state r b c t)
     (cond
       ((number? statement) statement)
+      ((eq? statement 'true) 'true)
+      ((eq? statement 'false) 'false)
       ((not (list? statement)) (lookup statement state))
       ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
       ((eq? (operator statement) '-) (if (null? (cddr statement))
