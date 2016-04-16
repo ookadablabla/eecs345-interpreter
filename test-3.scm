@@ -1,10 +1,10 @@
-; Test file for the interpreter project.
+; Contains functions that allow automated testing of Part 3 of the interpreter project.
 (load "interpreter.scm")
 
 ; Run all tests and format their results to be easily readable.
 (define run-all-tests
   (lambda ()
-    (let ((test-list (generate-integers 6 '())))
+    (let ((test-list (generate-integers 12 '())))
       (display (list->stringlist (map format-test-result (map run-test test-list) test-list))))))
 
 ; Run a single test.
@@ -20,7 +20,7 @@
   (lambda (test-result test-number)
     (let* ((test-number-string (number->string test-number))
            (test-info (string-append (string-append "Test " test-number-string) ": ")))
-      (string-append test-info (number->string test-result)))))
+      (string-append test-info (format "~a" test-result)))))
 
 ; Given a list of strings, return a single string containing each element of l, separated by
 ; the newline character \n.
