@@ -1,4 +1,3 @@
-#lang racket
 ; A simple parser for a Java-ish language
 ; EECS 345: Programming Language Concepts
 ;

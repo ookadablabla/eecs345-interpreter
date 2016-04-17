@@ -8,18 +8,15 @@
 ; somewhere on this page: https://docs.racket-lang.org/reference/exns.html, since
 ; we'll want to run this in DrRacket, which doesn't support mit-scheme (which does have
 ; good error handling).
-;
-; Note that using Racket requires adding #lang Racket to the top of all files. I think.
-; Otherwise my DrRacket won't let me switch languages.
 (define run-all-tests
   (lambda ()
-    (let ((test-list (generate-consecutive-integers 12 '())))
+    (let ((test-list (generate-consecutive-integers 11 '())))
       (display (list->stringlist (map format-test-result (map run-test test-list) test-list))))))
 
 ; Run a single test.
 (define run-test
   (lambda (test-number)
-    (interpret (string-append (string-append "tests/3-" (number->string test-number) ".txt")))))
+    (interpret (format "tests/3-~a.txt" (number->string test-number)))))
 
 ; Given a test result t and test number n, return "Test n: t".
 
@@ -27,9 +24,7 @@
 ; insufficiently motivated to find it.
 (define format-test-result
   (lambda (test-result test-number)
-    (let* ((test-number-string (number->string test-number))
-           (test-info (string-append (string-append "Test " test-number-string) ": ")))
-      (string-append test-info (format "~a" test-result)))))
+      (format "Test ~a: ~a" (number->string test-number) test-result)))
 
 ; Given a list of strings, return a single string containing each element of l, separated by
 ; the newline character \n.
@@ -37,7 +32,7 @@
   (lambda (l)
     (if (null? l)
         ""
-        (string-append (string-append (car l) "\n") (list->stringlist (cdr l))))))
+        (string-append (format "~a\n" (car l)) (list->stringlist (cdr l))))))
 
 ; Generate a list of integers in ascending order ending with num.
 ;

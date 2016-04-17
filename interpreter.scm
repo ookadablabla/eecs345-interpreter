@@ -1,5 +1,3 @@
-#lang racket
-
 ; EECS 345 Class Project 2
 ; James Hochadel and Andrew Marmorstein
 ;
