@@ -2,9 +2,18 @@
 (load "interpreter.scm")
 
 ; Run all tests and format their results to be easily readable.
+;
+; TODO: Currently only runs up to test 11, because test 12 returns an error,
+; and the code can't yet catch errors. I think the best option right now is
+; somewhere on this page: https://docs.racket-lang.org/reference/exns.html, since
+; we'll want to run this in DrRacket, which doesn't support mit-scheme (which does have
+; good error handling).
+;
+; Note that using Racket requires adding #lang Racket to the top of all files. I think.
+; Otherwise my DrRacket won't let me switch languages.
 (define run-all-tests
   (lambda ()
-    (let ((test-list (generate-integers 12 '())))
+    (let ((test-list (generate-consecutive-integers 12 '())))
       (display (list->stringlist (map format-test-result (map run-test test-list) test-list))))))
 
 ; Run a single test.
@@ -30,10 +39,12 @@
         ""
         (string-append (string-append (car l) "\n") (list->stringlist (cdr l))))))
 
-; Generate a list of integers in ascending order ending with num
-(define generate-integers
+; Generate a list of integers in ascending order ending with num.
+;
+; I feel like I'm missing some obvious simplification here, but who knows
+(define generate-consecutive-integers
   (lambda (num l)
     (cond
-      ((null? l) (generate-integers (- num 1) (cons num l)))
+      ((null? l) (generate-consecutive-integers (- num 1) (cons num l)))
       ((eq? (car l) 1) l)
-      (else (generate-integers (- num 1) (cons num l))))))
+      (else (generate-consecutive-integers (- num 1) (cons num l))))))

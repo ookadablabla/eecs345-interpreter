@@ -1,3 +1,5 @@
+#lang racket
+
 ; EECS 345 Class Project 2
 ; James Hochadel and Andrew Marmorstein
 ;
@@ -137,7 +139,6 @@
 ;helper methods for Mstate-func
 (define funcName cadr)
 (define getParams caddr)
-(define getBody cadddr)
 
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
@@ -443,7 +444,5 @@
 
 ;operation
 (define operation caddr)
-
-(define insideBraces cdr)
 
 (define exception cadr)
