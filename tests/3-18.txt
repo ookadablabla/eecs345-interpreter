@@ -17,4 +17,5 @@ function main() {
   finally {
     x = x + 100;
   }
-  retu
+  return x;
+}

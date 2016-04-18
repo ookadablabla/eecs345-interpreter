@@ -1,11 +1,11 @@
-; EECS 345 Class Project 2
+; EECS 345 Class Project
 ; James Hochadel and Andrew Marmorstein
 ;
 ; This code was restructured using solution2.scm from Blackboard to better abstract certain
 ; functions and generally clean up Mstate.
 (load "functionParser.scm")
 
-; Interpret a file containing c code.
+; Interpret a file containing Java-like code.
 (define interpret
   (lambda (filename)
     (call/cc
@@ -67,6 +67,8 @@
 
 ; Whenever entering a block of code with curly braces, this function should be called to evaluate
 ; the contents of the block inside a new layer of scope.
+; Statement format:
+; (begin (stmt-1) (stmt-2) ...)
 (define Mstate-begin
   (lambda (statement state return break continue throw)
     (getInnerScope (do-interpret statement
@@ -77,7 +79,8 @@
                                  (lambda (e s) (throw e (getInnerScope s)))))))
 
 ; Mstate-if handles if statements
-; TODO: Show what if statement looks like
+; Statement format: (else-statement is optional)
+; (if (condition) (statement) (else-statement))
 (define Mstate-if
   (lambda (statement state return break continue throw)
     (cond
@@ -90,7 +93,9 @@
 (define if-statement caddr)
 (define else-statement cadddr)
 
-;Mstate-func handles function declarations
+; Mstate-func handles function declarations
+; Statement format:
+; (function function-name (formal-param-1, formal-param-2, ...) (body))
 (define Mstate-func
   (lambda (statement state)
     (cond
@@ -101,7 +106,9 @@
 (define funcName cadr)
 (define getParams caddr)
 
-;Mstate-funcall after the function is called
+; Mstate-funcall after the function is called
+; Statement format:
+; (funcall function-name actual-param-1 actual-param-2 ...)
 (define Mstate-funcall
   (lambda (funcall state return break continue throw)
     (call/cc
@@ -115,16 +122,6 @@
                             continue
                             throw))))))
 
-    ;(Mstate-funcall-with-originState funcall state state return break continue throw)))
-
-;(define Mstate-funcall-with-originState
-;  (lambda (funcall state originState return break continue throw)
-;    (if (env-contains-symbol? (funcName funcall) (variables state))
-;      (globalStateOfEnvironment (do-interpret (getFuncBody (lookup (funcName funcall) state))
-;                                              ((getFuncEnvironment (lookup (funcName funcall) state)) funcall originState)
-;                                              return break continue throw))
-;      (else (cons (currentLayer state) (Mstate-funcall-with-originState funcall (nextLayers state) originState return break continue throw))))))
-
 ;helpers for Mstate-funcall
 (define globalStateOfEnvironment cdr)
 (define getFuncBody cadr)
@@ -132,7 +129,8 @@
 (define getBody cadddr)
 
 ; Modify the state based on a try-catch-finally block.
-; TODO: What does "statement" look like? Paste it here
+; Statement format, where each "body" can consist of multiple statements in a list:
+; (try (try-body) (catch (exception-name) (catch-body)) (finally (finally-body)))
 (define Mstate-tcf
   (lambda (statement state return break continue throw)
     (call/cc
@@ -160,6 +158,8 @@
 (define finally-body (lambda (t) (cadr (car (cdddr t)))))
 
 ; MState-var handles variable declaration
+; Statement format:
+; (var var-name) OR (var var-name value)
 (define Mstate-var
   (lambda (statement state r b c t)
     (cond
@@ -169,6 +169,9 @@
 
 ; Mstate-while handles while loops
 ; TODO: check that continue actually works
+; Statement format:
+; (while (condition) (body))
+; body may be one line only; for multiple lines, it must contain a begin.
 (define Mstate-while
   (lambda (condition statement state return break continue throw)
     (if (eq? 'true (Mbool condition state return break continue throw))
