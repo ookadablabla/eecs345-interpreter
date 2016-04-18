@@ -1,3 +1,9 @@
 README
 
-This project was written for EECS 345: Programming Language Concepts at Case Western Reserve University. The interpreter accepts a file containing C-like code as input and interprets it. The parser was provided.
+This project was written for EECS 345: Programming Language Concepts at Case Western Reserve University, taught by Harold Connamacher. The interpreter accepts a file containing Java-like code as input and interprets it. The parser was provided.
+
+TESTS
+
+To run tests: Open the test file for the project version you'd like to test (e.g. test-3.scm for Project 3 tests) and either call (run-all-tests) or (run-test n), where n is the number of the test.
+
+NOTE: Tests that deliberately throw an error currently crash the test function, so until I add error catching, any tests in the test battery after a test that deliberately crashes must be run one at a time. In other words, if test 3 of 5 throws an error deliberately, (run-all-tests) will only successfully run tests 1 and 2; use (run-test 4), etc. to run all tests after 3.
