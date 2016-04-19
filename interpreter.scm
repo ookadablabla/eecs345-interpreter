@@ -6,6 +6,16 @@
 (load "functionParser.scm")
 
 ; Interpret a file containing Java-like code.
+;
+; Setup:
+; 1. Create initial-return, which accepts a statement and the environment from which the return
+;    was called, evaluates the statement, and returns the result.
+; 2. Create outer-environment, which contains all globally accessible functions and variables.
+; 3. Create begin-interpret, a function that calls the file's main method with default return,
+;    break, continue, and throw.
+;
+; Execution: Run begin-interpret. Pass it outer-environment with an empty layer for main's local
+; variable and function definitions.
 (define interpret
   (lambda (filename)
     (call/cc
@@ -223,37 +233,62 @@
 ; Execute a function and return the value produced by its return statement.
 ; TODO: Match env-contains-symbol? check from Mstate-funcall
 (define Mvalue-funcall
-  (lambda (statement state return break continue throw)
+  (lambda (statement env return break continue throw)
     (call/cc
       (lambda (new-return)
         (let* ((func-name (funcName statement))
-               (function (lookup func-name state)))
+               (function (lookup func-name env)))
               (do-interpret (getFuncBody function)
-                            (getFunctionExecutionEnvironment statement state return break continue throw)
-                            (lambda (statement state) (new-return (Mvalue (operand statement) state return break continue throw)))
+                            ; replace the below with a call to the function closure's create-env function
+                            ; function in the closure should already pass the function name into getFunctionExecutionEnvironment
+                            ; so that we don't have to do it here
+                            (getFunctionExecutionEnvironment statement env return break continue throw)
+                            (lambda (statement env) (new-return (Mvalue (operand statement) env return break continue throw)))
                             break
                             continue
                             throw))))))
 
+; getFunctionExecutionEnvironment
+; funcName -> (() (env in scope where function was declared))
+
+; bindParameters
+; funcall, env -> ((actual-params) (env in scope where function was declared))
+
 ; getEnvironment gets the environment within which a function call has access
 ; Assumes funcall is of format (funcall methodName actual-param-1 actual-param-2 ...)
 (define getFunctionExecutionEnvironment
-  (lambda (funcall state r b c t)
-    (getEnvironment (name funcall) (getParamsFromState (name funcall) state) (paramValues funcall) state r b c t)))
+  (lambda (funcall env r b c t)
+    (bindParameters (function-name funcall) (param-list funcall) (initializeFunctionExecutionEnvironment (function-name funcall) env))
+    ;(getEnvironment (name funcall) (getParamsFromState (name funcall) env) (paramValues funcall) env r b c t)))
 
-(define getEnvironment
-  (lambda (funName funParams funParamValues state r b c t)
-    (cons (getLocal funParams funParamValues state r b c t) (getGlobal funName state))))
+(define function-name cadr)
+(define param-list cddr)
 
-;getGlobal gets the global variables for the environment
-(define getGlobal
-  (lambda (funName state)
+;(define getEnvironment
+;  (lambda (funName funParams funParamValues state r b c t)
+;    (cons (getLocal funParams funParamValues state r b c t) (getFunctionDeclarationEnvironment funName state))))
+
+; Returns an environment with an empty current layer followed by everything that
+; the function has access to by static scoping.
+; Return looks like:
+; ((()()) ((declaration-scope-symbols)(declaration-scope-values)) ... ((global-symbols)(global-values)))
+(define initializeFunctionExecutionEnvironment
+  (lambda (function-name env)
+    (cons '(()()) (getFunctionDeclarationEnvironment function-name env))))
+
+; Returns an environment with all bindings within the function's scope - i.e.,
+; all bindings available in the layer it was declared and above. Does not prepend
+; an empty local scope. Based on static scoping.
+; Return looks like:
+; (((declaration-scope-symbols)(declaration-scope-values)) ... ((global-symbols)(global-values)))
+(define getFunctionDeclarationEnvironment
+  (lambda (funName env)
     (cond
-      ((env-contains-symbol? funName (variables state)) state)
-      (else (getGlobal funName (nextLayers state))))))
+      ((env-contains-symbol? funName (variables env)) env)
+      (else (getFunctionDeclarationEnvironment funName (nextLayers env))))))
 
 ;getLocal get all of the local variable for the function which will be the parameters
-(define getLocal
+(define bindParameters
   (lambda (funParams paramValues state r b c t)
     (getLocalWithFormat funParams paramValues state '(()()) r b c t)))
 
