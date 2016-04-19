@@ -248,33 +248,18 @@
                             continue
                             throw))))))
 
-; getFunctionExecutionEnvironment
-; funcName -> (() (env in scope where function was declared))
-
-; bindParameters
-; funcall, env -> ((actual-params) (env in scope where function was declared))
-
-; getEnvironment gets the environment within which a function call has access
+; getFunctionExecutionEnviroinment gets the execution environment for a function call,
+; which includes everything available to the function through static scoping along with
+; its parameters.
 ; Assumes funcall is of format (funcall methodName actual-param-1 actual-param-2 ...)
+; Return looks like
+; (((formal-param-names)(actual-param-values)) ((declaration-scope-symbols)(declaration-scope-values)) ... ((global-symbols)(global-values)))
 (define getFunctionExecutionEnvironment
   (lambda (funcall env r b c t)
-    (bindParameters (function-name funcall) (param-list funcall) (initializeFunctionExecutionEnvironment (function-name funcall) env))
-    ;(getEnvironment (name funcall) (getParamsFromState (name funcall) env) (paramValues funcall) env r b c t)))
+    (cons (bindParameters (function-name funcall) (param-list funcall) env r b c t) (getFunctionDeclarationEnvironment (function-name funcall) env))))
 
 (define function-name cadr)
 (define param-list cddr)
-
-;(define getEnvironment
-;  (lambda (funName funParams funParamValues state r b c t)
-;    (cons (getLocal funParams funParamValues state r b c t) (getFunctionDeclarationEnvironment funName state))))
-
-; Returns an environment with an empty current layer followed by everything that
-; the function has access to by static scoping.
-; Return looks like:
-; ((()()) ((declaration-scope-symbols)(declaration-scope-values)) ... ((global-symbols)(global-values)))
-(define initializeFunctionExecutionEnvironment
-  (lambda (function-name env)
-    (cons '(()()) (getFunctionDeclarationEnvironment function-name env))))
 
 ; Returns an environment with all bindings within the function's scope - i.e.,
 ; all bindings available in the layer it was declared and above. Does not prepend
@@ -287,35 +272,43 @@
       ((env-contains-symbol? funName (variables env)) env)
       (else (getFunctionDeclarationEnvironment funName (nextLayers env))))))
 
-;getLocal get all of the local variable for the function which will be the parameters
+; Given the name of a function, the actual parameters being passed to the function,
+; and the environment from which the function was called, locate the function closure
+; in env and bind the actual parameters to the function's formal parameters.
+; Return looks like:
+; ((formal-param-names)(actual-param-values))
 (define bindParameters
-  (lambda (funParams paramValues state r b c t)
-    (getLocalWithFormat funParams paramValues state '(()()) r b c t)))
+  (lambda (funcName actualParams env r b c t)
+    (bindActualToFormal (getParamsFromEnvironment funcName env) actualParams env '(()()) r b c t)))
 
-(define getLocalWithFormat
-  (lambda (funParams paramValues state localState r b c t)
+; Returns the list of formal parameters as stored in the function closure in the environment.
+(define getParamsFromEnvironment
+  (lambda (funName env)
+    (car (lookup funName env))))
+
+; Recursively bind the actual parameters to the formal parameters.
+; Accepts the environment from which the function is being called and localEnv, which should
+; be '(()()) on the first call.
+; Not a great name but... meh
+(define bindActualToFormal
+  (lambda (formalParams actualParams env localEnv r b c t)
     (cond
-      ((and (null? funParams) (not (null? paramValues))) (error 'invalid (format "too many parameters")))
-      ((null? funParams) localState)
-      (else (getLocalWithFormat (restOfParams funParams)
-                                (restOfParamValues paramValues)
-                                state
-                                (currentLayer (insert (currentParam funParams) (Mvalue (currentParamValue paramValues) state r b c t) (cons localState '())))
+      ; If we've reached the end of the formal or actual param list but not the other, the
+      ; function was not called with the correct number of parameters and we throw an error.
+      ((and (null? formalParams) (not (null? actualParams))) (error 'methodSignature (format "too many parameters")))
+      ((and (not (null? formalParams)) (null? actualParams)) (error 'methodSignature (format "too few parameters")))
+      ((null? formalParams) localEnv)
+      (else (bindActualToFormal (restOfParams formalParams)
+                                (restOfParamValues actualParams)
+                                env
+                                (currentLayer (insert (currentParam formalParams) (Mvalue (currentParamValue actualParams) env r b c t) (cons localEnv '())))
                                 r b c t)))))
 
-;helpers for getLocal
+;helpers for bindActualToFormal
 (define restOfParams cdr)
 (define restOfParamValues cdr)
 (define currentParam car)
 (define currentParamValue car)
-
-;helpers for getEnvironment
-(define getParamsFromState
-  (lambda (funName state)
-    (car (lookup funName state))))
-
-(define name cadr)
-(define paramValues cddr)
 
 ; Mbool: Evaluate a statement for a truth value of true or false.
 (define Mbool
