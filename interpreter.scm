@@ -72,17 +72,17 @@
 
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
-  (lambda (statement state r b c t)
-    (replace_var (variable statement) (Mvalue (operation statement) state r b c t) state)))
+  (lambda (statement env r b c t)
+    (replace_var (variable statement) (Mvalue (operation statement) env r b c t) env)))
 
 ; Whenever entering a block of code with curly braces, this function should be called to evaluate
 ; the contents of the block inside a new layer of scope.
 ; Statement format:
 ; (begin (stmt-1) (stmt-2) ...)
 (define Mstate-begin
-  (lambda (statement state return break continue throw)
+  (lambda (statement env return break continue throw)
     (getInnerScope (do-interpret statement
-                                 (addLevelOfScope state)
+                                 (addLevelOfScope env)
                                  return
                                  (lambda (s) (break (getInnerScope s)))
                                  (lambda (s) (continue (getInnerScope s)))
@@ -92,11 +92,11 @@
 ; Statement format: (else-statement is optional)
 ; (if (condition) (statement) (else-statement))
 (define Mstate-if
-  (lambda (statement state return break continue throw)
+  (lambda (statement env return break continue throw)
     (cond
-      ((eq? 'true (Mbool (if-condition statement) state return break continue throw)) (Mstate (if-statement statement) state return break continue throw))
-      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) state return break continue throw))
-      (else state))))
+      ((eq? 'true (Mbool (if-condition statement) env return break continue throw)) (Mstate (if-statement statement) env return break continue throw))
+      ((not (null? (else-statement-exists statement))) (Mstate (else-statement statement) env return break continue throw))
+      (else env))))
 
 (define else-statement-exists cdddr)
 (define if-condition cadr)
@@ -107,30 +107,22 @@
 ; Statement format:
 ; (function function-name (formal-param-1, formal-param-2, ...) (body))
 (define Mstate-func
-  (lambda (statement state)
+  (lambda (statement env)
     (cond
-      ((stateContains (funcName statement) state) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
-      (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) state)))))
+      ((stateContains (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
+      (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) env)))))
 
 ;helper methods for Mstate-func
 (define funcName cadr)
 (define getParams caddr)
 
-; Mstate-funcall after the function is called
+; When a function is called without the calling line needing its return
+; value, execute the function and then return the environment.
 ; Statement format:
 ; (funcall function-name actual-param-1 actual-param-2 ...)
 (define Mstate-funcall
-  (lambda (funcall state return break continue throw)
-    (call/cc
-      (lambda (new-return)
-        (let* ((func-name (funcName funcall))
-               (function (lookup func-name state)))
-              (do-interpret (getFuncBody function)
-                            (getFunctionExecutionEnvironment funcall state return break continue throw)
-                            (lambda (statement state) (new-return state))
-                            break
-                            continue
-                            throw))))))
+  (lambda (funcall env return break continue throw)
+    (begin (Mvalue-funcall funcall env return break continue throw) env)))
 
 ;helpers for Mstate-funcall
 (define globalStateOfEnvironment cdr)
@@ -142,7 +134,7 @@
 ; Statement format, where each "body" can consist of multiple statements in a list:
 ; (try (try-body) (catch (exception-name) (catch-body)) (finally (finally-body)))
 (define Mstate-tcf
-  (lambda (statement state return break continue throw)
+  (lambda (statement env return break continue throw)
     (call/cc
       (lambda (catch-continuation)
         (letrec ((finally (lambda (s)
@@ -154,8 +146,8 @@
                   ; jumps us to it when we encounter a throw. Otherwise, pass whatever throw continuation
                   ; we were passed when we entered this try block.
                   (if (pair? (catch-block statement))
-                    (finally (Mstate-begin (try-body statement) state return break continue new-throw))
-                    (finally (Mstate-begin (try-body statement) state return break continue throw)))))
+                    (finally (Mstate-begin (try-body statement) env return break continue new-throw))
+                    (finally (Mstate-begin (try-body statement) env return break continue throw)))))
                 (catch (lambda (e s)
                   (finally (Mstate-begin (catch-body statement) (insert (catch-err statement) e s) return break continue throw)))))
                 (try (lambda (e s) (catch-continuation (catch e s)))))))))
@@ -171,11 +163,11 @@
 ; Statement format:
 ; (var var-name) OR (var var-name value)
 (define Mstate-var
-  (lambda (statement state r b c t)
+  (lambda (statement env r b c t)
     (cond
-      ;((stateContains (variable statement) state) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
-      ((null? (thirdElement statement)) (insert (variable statement) 'undefined state))
-      (else (insert (variable statement) (Mvalue (operation statement) state r b c t) state)))))
+      ;((stateContains (variable statement) env) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
+      ((null? (thirdElement statement)) (insert (variable statement) 'undefined env))
+      (else (insert (variable statement) (Mvalue (operation statement) env r b c t) env)))))
 
 ; Mstate-while handles while loops
 ; TODO: check that continue actually works
@@ -183,18 +175,18 @@
 ; (while (condition) (body))
 ; body may be one line only; for multiple lines, it must contain a begin.
 (define Mstate-while
-  (lambda (condition statement state return break continue throw)
-    (if (eq? 'true (Mbool condition state return break continue throw))
+  (lambda (condition statement env return break continue throw)
+    (if (eq? 'true (Mbool condition env return break continue throw))
       (Mstate-while condition
                     statement
                     (call/cc
                       (lambda (new-continue)
-                        (Mstate statement state return break new-continue throw)))
+                        (Mstate statement env return break new-continue throw)))
                     return
                     break
                     continue
                     throw)
-      state)))
+      env)))
 
 (define parse-while-condition cadr)
 (define parse-while-statement caddr)
@@ -202,21 +194,21 @@
 ; Mvalue: Evaluate an expression to determine its value.
 ; Last params are return break continue throw. Shortened for brevity.
 (define Mvalue
-  (lambda (statement state r b c t)
+  (lambda (statement env r b c t)
     (cond
       ((number? statement) statement)
       ((eq? statement 'true) 'true)
       ((eq? statement 'false) 'false)
-      ((not (list? statement)) (lookup statement state))
-      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
+      ((not (list? statement)) (lookup statement env))
+      ((eq? (operator statement) '+) (+ (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '-) (if (null? (cddr statement))
-                                         (- (Mvalue (operand1 statement) state r b c t)) ; unary "-"
-                                         (- (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t))))
-      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
-      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
-      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) state r b c t) (Mvalue (operand2 statement) state r b c t)))
-      ((eq? (operator statement) 'funcall) (Mvalue-funcall statement state r b c t))
-      (else (Mbool statement state r b c t)))))
+                                         (- (Mvalue (operand1 statement) env r b c t)) ; unary "-"
+                                         (- (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t))))
+      ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
+      (else (Mbool statement env r b c t)))))
 
 (define operator car)
 (define operand1 cadr)
