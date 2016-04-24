@@ -10,18 +10,17 @@
 ; Setup:
 ; 1. Create initial-return, which accepts a statement and the environment from which the return
 ;    was called, evaluates the statement, and returns the result.
-; 2. Create outer-environment, which contains all globally accessible functions and variables.
-; 3. Create begin-interpret, a function that calls the file's main method with default return,
-;    break, continue, and throw.
+; 2. Create outer-environment, which contains all class definitions.
+; 3. Create begin-interpret, a function that calls the main method in class classname.
 ;
 ; Execution: Run begin-interpret. Pass it outer-environment with an empty layer for main's local
 ; variable and function definitions.
 (define interpret
-  (lambda (filename)
+  (lambda (filename classname)
     (call/cc
       (lambda (return)
         (let* ((initial-return (lambda (statement env) (return (Mvalue (operand statement) env return default-break default-continue default-throw))))
-               (outer-environment (do-interpret (parser filename) initial-env (lambda (statement env) (return env)) default-break default-continue default-throw))
+               (outer-environment (interpret-classes (parser filename) initial-env (lambda (statement env) (return env)) default-break default-continue default-throw))
                (begin-interpret (lambda (env) (Mvalue-funcall (mainFuncall main) env initial-return default-break default-continue default-throw))))
 
               ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
@@ -30,6 +29,15 @@
 
 (define main '((funcall main)))
 (define mainFuncall car)
+
+; Recursively evaluate all class definitions in the statement list.
+(define interpret-classes
+  (lambda (statement state return break continue throw)
+    (if (null? statement)
+      state
+      (interpret-classes (restOfExpressions statement)
+                         (Mclass-state (firstExpression statement) state return break continue throw)
+                         return break continue throw))))
 
 ; do-interpret recursively evaluates statements and modifies the state appropriately
 ; based on their contents.
