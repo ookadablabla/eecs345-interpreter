@@ -59,7 +59,7 @@
       ((eq? (operator statement) 'function) (Mstate-func statement state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
       ((eq? (operator statement) 'return) (return statement state))
-      ((eq? (operator statement) 'throw) (throw (exception statement) state))
+      ((eq? (operator statement) 'throw) (throw (Mvalue (exception statement) state return break continue throw)))
       ((eq? (operator statement) 'try) (Mstate-tcf statement state return break continue throw))
       ((eq? (operator statement) 'var) (Mstate-var statement state return break continue throw))
       ((eq? (operator statement) 'while)
@@ -86,7 +86,7 @@
                                  return
                                  (lambda (s) (break (getInnerScope s)))
                                  (lambda (s) (continue (getInnerScope s)))
-                                 (lambda (e s) (throw e (getInnerScope s)))))))
+                                 throw))))
 
 ; Mstate-if handles if statements
 ; Statement format: (else-statement is optional)
@@ -149,8 +149,20 @@
                     (finally (Mstate-begin (try-body statement) env return break continue new-throw))
                     (finally (Mstate-begin (try-body statement) env return break continue throw)))))
                 (catch (lambda (e s)
-                  (finally (Mstate-begin (catch-body statement) (insert (catch-err statement) e s) return break continue throw)))))
-                (try (lambda (e s) (catch-continuation (catch e s)))))))))
+                  (finally (catch-begin (catch-body statement) (catch-err statement) e s return break continue throw)))))
+                ; Call "try" with catch as the catch-continuation
+                (try (lambda (e) (catch-continuation (catch e env)))))))))
+
+; Same as Mstate-begin, but with the addition of inserting the exception into the
+; environment before calling do-interpret.
+(define catch-begin
+  (lambda (statement e-name e-value env return break continue throw)
+    (getInnerScope (do-interpret statement
+                                 (insert e-name e-value (addLevelOfScope env))
+                                 return
+                                 (lambda (s) (break (getInnerScope s)))
+                                 (lambda (s) (continue (getInnerScope s)))
+                                 throw))))
 
 (define try-body cadr)
 (define catch-body (lambda (v) (caddr (caddr v))))
@@ -352,7 +364,7 @@
 (define replace_var
   (lambda (var value state)
     (cond
-      ((null? state) (error 'out-of-scope (format "variable ~a is out of scope" var)))
+      ((null? state) (error 'out-of-scope (format "Symbol ~a is out of scope or does not exist" var)))
       ((env-contains-symbol? var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
       (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
 
