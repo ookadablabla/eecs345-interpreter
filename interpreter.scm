@@ -3,7 +3,7 @@
 ;
 ; This code was restructured using solution2.scm from Blackboard to better abstract certain
 ; functions and generally clean up Mstate.
-(load "functionParser.scm")
+(load "classParser.scm")
 
 ; Interpret a file containing Java-like code.
 ;
