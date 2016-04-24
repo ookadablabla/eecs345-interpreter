@@ -59,8 +59,8 @@
 (define Mclass-state
   (lambda (statement class-state return break continue throw)
     (cond
-      ((null? (has-super statement)) (insert (className statement) (cons (innerParens (do-interpret (body statement) initial-env return break continue throw)) (cons (cons '() '()) '())) class-state))
-      (else (insert (className statement) (cons (innerParens (do-interpret (body statement) initial-env return break continue throw)) (cons (cons (get-super statement) '()) '())) class-state)))))
+      ((null? (has-super statement)) (insert (className statement) (append (do-interpret (body statement) initial-env return break continue throw) '(())) class-state))
+      (else (insert (className statement) (append (do-interpret (body statement) initial-env return break continue throw) (cons (get-super statement) '())) class-state)))))
     
 (define has-super caddr)
 (define className cadr)
