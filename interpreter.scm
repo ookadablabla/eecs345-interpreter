@@ -46,6 +46,20 @@
 (define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
 (define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
 
+; Mclass-state add a class from the given statement to the class environment
+; the environment will have class and their defffenitions which include fields and functions/closures
+(define Mclass-state
+  (lambda (statement class-state return break continue throw)
+    (cond
+      ((null? (has-super statement)) (insert (className statement) (cons (innerParens (do-interperet (body statement) initial-env return break continue throw)) (cons (cons '() '()) '())) class-state))
+      (else (insert (className statement) (cons (innerParens (do-interpret (body statement) initial-env return break continue throw)) (cons (cons (get-super statement) '()) '())) class-state)))))
+    
+(define has-super caddr)
+(define className cadr)
+(define body cadddr)
+(define get-super (lambda (v) (cadr (caddr v))))
+(define innerParens car)
+       
 ; Mstate modifies the state depending on the contents of statement, then returns the state..
 ; TODO: Move while's continuation to Mstate-while
 (define Mstate

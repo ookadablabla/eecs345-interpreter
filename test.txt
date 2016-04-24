@@ -1,30 +1,38 @@
-function divide(x, y) {
-  if (y == 0)
-    throw 1000000;
-  return x / y;
+class A {
+  var x = 1;
+  var y = 2;
+
+  function m() {
+    return this.m2();
+  }
+
+  function m2() {
+    return x+y;
+  }
 }
 
- function main() {
-  var x = 0;
-  var j = 1;
+class B extends A {
+  var y = 22;
+  var z = 3;
 
-  try {
-    while (j >= 0) {
-    var i = 10;
-    while (i >= 0) {
-      try {
-        x = x + divide(10*i, i);
-      }
-      catch(e) {
-        x = x + divide(e, j);
-      }
-      i = i - 1;
-    }
-    j = j - 1;
-   }
+  function m() {
+    return super.m();
   }
-  catch (e2) {
-    x = x * 2;
+
+  function m2() {
+    return x+y+z;
   }
-  return x;
+}
+
+class C extends B {
+  var y = 222;
+  var w = 4;
+
+  function m() {
+    return super.m();
+  }
+
+  static function main() {
+    return new C().m();
+  }
 }
