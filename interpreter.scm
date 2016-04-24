@@ -59,7 +59,7 @@
 (define Mclass-state
   (lambda (statement class-state return break continue throw)
     (cond
-      ((null? (has-super statement)) (insert (className statement) (cons (innerParens (do-interperet (body statement) initial-env return break continue throw)) (cons (cons '() '()) '())) class-state))
+      ((null? (has-super statement)) (insert (className statement) (cons (innerParens (do-interpret (body statement) initial-env return break continue throw)) (cons (cons '() '()) '())) class-state))
       (else (insert (className statement) (cons (innerParens (do-interpret (body statement) initial-env return break continue throw)) (cons (cons (get-super statement) '()) '())) class-state)))))
     
 (define has-super caddr)
@@ -79,6 +79,7 @@
       ((eq? (operator statement) 'continue) (continue state))
       ((eq? (operator statement) 'funcall) (Mstate-funcall statement state return break continue throw))
       ((eq? (operator statement) 'function) (Mstate-func statement state))
+      ((eq? (operator statement) 'static-function) (Mstate-static-func statement state))
       ((eq? (operator statement) 'if) (Mstate-if statement state return break continue throw))
       ((eq? (operator statement) 'return) (return statement state))
       ((eq? (operator statement) 'throw) (throw (Mvalue (exception statement) state return break continue throw)))
@@ -134,6 +135,12 @@
       ((stateContains (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) env)))))
 
+(define Mstate-static-func
+  (lambda (statement env)
+    (cond
+      ((stateContains (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
+      (else (cons (car env) (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) '((()()))))))))
+  
 ;helper methods for Mstate-func
 (define funcName cadr)
 (define getParams caddr)

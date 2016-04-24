@@ -1,25 +1,9 @@
 class A {
-  var x = 1;
-  var y = 2;
+  var x = 5;
+  var y = 10;
 
-  function m() {
-    return this.m2();
-  }
-
-  function m2() {
-    return x+y;
-  }
-}
-
-class B extends A {
-  var y = 22;
-  var z = 3;
-
-  function m() {
-    return super.m();
-  }
-
-  function m2() {
-    return x+y+z;
+  static function main() {
+    var a = new A();
+    return a.x + a.y;
   }
 }
