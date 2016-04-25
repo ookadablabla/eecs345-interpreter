@@ -272,7 +272,7 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
-      ((eq? (operator statement) 'dot) (Mvalue (opperand2 statement) (lookup (opperand1 statement))))
+      ((eq? (operator statement) 'dot) (Mvalue (operand2 statement) (lookup (operand1 statement) env) r b c t))
       (else (Mbool statement env r b c t)))))
 
 (define operator car)
