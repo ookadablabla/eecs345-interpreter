@@ -271,12 +271,19 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
+      ((eq? (operator statement) 'dot) (Mvalue (opperand2 statement) (lookup (opperand1 statement))))
       (else (Mbool statement env r b c t)))))
 
 (define operator car)
 (define operand1 cadr)
 (define operand2 caddr)
 (define operand operand1) ; TODO: Can this be moved / replaced?
+
+;function for when the dot opperator is used
+(define Mvalue-dot
+  (lambda (statement env r b c t)
+    (cond
+      (
 
 ; When a function is called, Mvalue-funcall does the following:
 ; 1. Creates the function's execution environment using the environment function stored
