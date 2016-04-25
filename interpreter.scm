@@ -272,7 +272,7 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
-      ((eq? (operator statement) 'dot) (Mvalue (operand2 statement) (lookup (operand1 statement) env) r b c t))
+      ((eq? (operator statement) 'dot) (Mvalue-dot statement env r b c t))
       (else (Mbool statement env r b c t)))))
 
 (define operator car)
@@ -280,7 +280,17 @@
 (define operand2 caddr)
 (define operand operand1) ; TODO: Can this be moved / replaced?
 
+;Mvalue-dot gets the value based of of the specified environment
+;it has a different case for handleing the possible operands before the dot
+(define Mvalue-dot
+  (lambda (statement env r b c t)
+    (cond
+      ((eq? (operand1 statement) 'this) (Mvalue (operand2 statement) (getInnerScope env) r b c t))
+      ((eq? (operand1 statement) 'super) (Mvalue (operand2 statement) (getInnerScope (getInnerScope env)) r b c t))
+      (else (Mvalue (operand2 statement) (lookup (operand1 statement) env) r b c t)))))
 
+;Mvalue-funcall gets the value of a function call
+;this function takes the statemetn and creats a usable statement for the old Mvalue-funcall by parsing and reorderin g and then getting the correct environment
 (define Mvalue-funcall
   (lambda (statement env return break continue throw)
     (cond
