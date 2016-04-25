@@ -208,21 +208,22 @@
     (cond
       ;((stateContains (variable statement) env) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined env))
-      ((not (list? thirdElement statement)) (insert (variable statement) (Mvalue (operation statement) env r b c t) env))
-      (else (insert (variable statement) (get-class-env (class statement) env) env))
+      ((not (list? (unNestIfValue (thirdElement statement)))) (insert (variable statement) (Mvalue (operation statement) env r b c t) env))
+      (else (insert (variable statement) (get-class-env (class-type statement) env) env)))))
 
 (define isConstructor (lambda (v) (eq? (caaddr v) 'new)))
-(define class (lambda (v) (car (cdaddr v))))
+(define class-type (lambda (v) (car (cdaddr v))))
+(define unNestIfValue car)
 
 ;get-class-env will take a class and and environment and return the closure for the object of that class
 ;class will be the name of the class and env will be the environment
 (define get-class-env
-  (lambda (class env)
+  (lambda (class-name env)
     (cond
-      ((no-parent-no-static (lookup class env)) (cons (class-env (lookup class env) env))
-      ((has-parent-no-static (lookup class env)) (cons (class-env class) (get-class-env (get-parent-no-static (lookup class env)) env)))
-      ((no-parent-has-static (lookup class env)) (cons (class-env (lookup class env) env)))
-      (else (cons (class-env class) (get-class-env (get-parent-has-static (lookup class env)) env)))))))
+      ((no-parent-no-static (lookup class-name env)) (class-env (lookup class-name env)))
+      ((has-parent-no-static (lookup class-name env)) (cons (class-env (lookup class-name env)) (get-class-env (get-parent-no-static (lookup class-name env)) env)))
+      ((no-parent-has-static (lookup class-name env)) (class-env (lookup class-name env) env))
+      (else (cons (class-env (lookup class-name env) (get-class-env (get-parent-has-static (lookup class-name env)) env)))))))
 
 (define no-parent-no-static (lambda (v) (null? (cadr v))))
 (define has-parent-no-static (lambda (v) (not (list? (cadr v)))))
