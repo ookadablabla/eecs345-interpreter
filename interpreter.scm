@@ -272,6 +272,7 @@
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
+      ((eq? (operator statement) 'dot) (Mvalue (opperand2 statement) (lookup (opperand1 statement))))
       (else (Mbool statement env r b c t)))))
 
 (define operator car)
@@ -279,6 +280,18 @@
 (define operand2 caddr)
 (define operand operand1) ; TODO: Can this be moved / replaced?
 
+
+(define Mvalue-funcall
+  (lambda (statment env return break continue throw)
+    (cond
+      ((eq? (opperand1 statement) 'this) (Mvalue-funcall-with-env (cons (cons 'funcall (function-call statement)) (params-of-funcall statement)) env return break continue throw))
+      ((eq? (opperand1 statement) 'super) (Mvalue-funcall-with-env (cons (cons 'funcall (funtion-call statement)) (params-of-funcall statement)) (getInnerScope env) return break continue throw))
+      (else (Mvalue-funcall-with-env (cons (cons 'funcall (function-call statement)) (params-of-funcall statement)) (lookup (class-type-of-function statement)) return break continue throw)))))
+
+(define function-call (lambda (v) (car (cddadr v))))
+(define params-of-funcall cddr)
+(define class-type-of-function cadadr)
+                                               
 ; When a function is called, Mvalue-funcall does the following:
 ; 1. Creates the function's execution environment using the environment function stored
 ;    in the function closure
@@ -288,7 +301,7 @@
 ; Differing
 ; Execute a function and return the value produced by its return statement.
 ; TODO: Match env-contains-symbol? check from Mstate-funcall
-(define Mvalue-funcall
+(define Mvalue-funcall-with-env
   (lambda (statement env return break continue throw)
     (call/cc
       (lambda (new-return)
