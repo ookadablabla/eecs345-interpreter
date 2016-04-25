@@ -282,11 +282,11 @@
 
 
 (define Mvalue-funcall
-  (lambda (statment env return break continue throw)
+  (lambda (statement env return break continue throw)
     (cond
-      ((eq? (opperand1 statement) 'this) (Mvalue-funcall-with-env (cons (cons 'funcall (function-call statement)) (params-of-funcall statement)) env return break continue throw))
-      ((eq? (opperand1 statement) 'super) (Mvalue-funcall-with-env (cons (cons 'funcall (funtion-call statement)) (params-of-funcall statement)) (getInnerScope env) return break continue throw))
-      (else (Mvalue-funcall-with-env (cons (cons 'funcall (function-call statement)) (params-of-funcall statement)) (lookup (class-type-of-function statement)) return break continue throw)))))
+      ((eq? (operand1 statement) 'this) (Mvalue-funcall-with-env (append (cons 'funcall (cons (function-call statement) '())) (params-of-funcall statement)) env return break continue throw))
+      ((eq? (operand1 statement) 'super) (Mvalue-funcall-with-env (append (cons 'funcall (cons (funtion-call statement) '())) (params-of-funcall statement)) (getInnerScope env) return break continue throw))
+      (else (Mvalue-funcall-with-env (append (cons 'funcall (cons (function-call statement) '())) (params-of-funcall statement)) (lookup (class-type-of-function statement) env) return break continue throw)))))
 
 (define function-call (lambda (v) (car (cddadr v))))
 (define params-of-funcall cddr)
