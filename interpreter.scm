@@ -279,12 +279,18 @@
 (define operand2 caddr)
 (define operand operand1) ; TODO: Can this be moved / replaced?
 
-;function for when the dot opperator is used
-(define Mvalue-dot
-  (lambda (statement env r b c t)
-    (cond
-      (
 
+(define Mvalue-funcall
+  (lambda (statment env return break continue throw)
+    (cond
+      ((eq? (opperand1 statement) 'this) (Mvalue-funcall-with-env (cons (cons 'funcall (function-call statement)) (params-of-funcall statement)) env return break continue throw))
+      ((eq? (opperand1 statement) 'super) (Mvalue-funcall-with-env (cons (cons 'funcall (funtion-call statement)) (params-of-funcall statement)) (getInnerScope env) return break continue throw))
+      (else (Mvalue-funcall-with-env (cons (cons 'funcall (function-call statement)) (params-of-funcall statement)) (lookup (class-type-of-function statement)) return break continue throw)))))
+
+(define function-call (lambda (v) (car (cddadr v))))
+(define params-of-funcall cddr)
+(define class-type-of-function cadadr)
+                                               
 ; When a function is called, Mvalue-funcall does the following:
 ; 1. Creates the function's execution environment using the environment function stored
 ;    in the function closure
@@ -294,7 +300,7 @@
 ; Differing
 ; Execute a function and return the value produced by its return statement.
 ; TODO: Match env-contains-symbol? check from Mstate-funcall
-(define Mvalue-funcall
+(define Mvalue-funcall-with-env
   (lambda (statement env return break continue throw)
     (call/cc
       (lambda (new-return)
