@@ -21,14 +21,15 @@
       (lambda (return)
         (let* ((initial-return (lambda (statement env) (return (Mvalue (operand statement) env return default-break default-continue default-throw))))
                (outer-environment (interpret-classes (parser filename) initial-env (lambda (statement env) (return env)) default-break default-continue default-throw))
-               (begin-interpret (lambda (env) (Mvalue-funcall (mainFuncall main) env initial-return default-break default-continue default-throw))))
+               (main-closure (lookup 'main (lookup (string->symbol classname) outer-environment)))
+               (begin-interpret (lambda (env) (do-interpret (getFuncBody main-closure) env initial-return default-break default-continue default-throw))))
 
               ; Begin interpreting. Pass in the environment, which is built by interpreting the outermost layer
               ; of the program, containing function and global variable definitions.
-              (begin-interpret (getFunctionExecutionEnvironment (mainFuncall main) outer-environment initial-return default-break default-continue default-throw)))))))
+              (begin-interpret (addLevelOfScope outer-environment)))))))
 
-(define main '((funcall main)))
-(define mainFuncall car)
+;(define main '((funcall main)))
+;(define mainFuncall car)
 
 ; Recursively evaluate all class definitions in the statement list.
 (define interpret-classes
@@ -61,13 +62,13 @@
     (cond
       ((null? (has-super statement)) (insert (className statement) (append (do-interpret (body statement) initial-env return break continue throw) '(())) class-state))
       (else (insert (className statement) (append (do-interpret (body statement) initial-env return break continue throw) (cons (get-super statement) '())) class-state)))))
-    
+
 (define has-super caddr)
 (define className cadr)
 (define body cadddr)
 (define get-super (lambda (v) (cadr (caddr v))))
 (define innerParens car)
-       
+
 ; Mstate modifies the state depending on the contents of statement, then returns the state..
 ; TODO: Move while's continuation to Mstate-while
 (define Mstate
@@ -140,7 +141,7 @@
     (cond
       ((stateContains (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (cons (car env) (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) '((()()))))))))
-  
+
 ;helper methods for Mstate-func
 (define funcName cadr)
 (define getParams caddr)
