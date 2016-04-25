@@ -202,13 +202,34 @@
 
 ; MState-var handles variable declaration
 ; Statement format:
-; (var var-name) OR (var var-name value)
+; (var var-name) OR (var var-name value) OR (var var-name NEW Constructor)
 (define Mstate-var
   (lambda (statement env r b c t)
     (cond
       ;((stateContains (variable statement) env) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined env))
+      ((isConstructor statement) (insert (variable statement) (get-class-env (class statement) env) env))
       (else (insert (variable statement) (Mvalue (operation statement) env r b c t) env)))))
+
+(define isConstructor (lambda (v) (eq? (caaddr v) new)))
+(define class (lambda (v) (car (cdaddr v))))
+
+;get-class-env will take a class and and environment and return the closure for the object of that class
+;class will be the name of the class and env will be the environment
+(define get-class-env
+  (lambda (class env)
+    (cond
+      ((no-parent-no-static (lookup class env)) (cons (class-env (lookup class env) env))
+      ((has-parent-no-static (lookup class env)) (cons (class-env class) (get-class-env (get-parent-no-static (lookup class env)) env)))
+      ((no-parent-has-static (lookup class env)) (cons (class-env (lookup class env) env)))
+      (else (cons (class-env class) (get-class-env (get-parent-has-static (lookup class env)) env)))))))
+
+(define no-parent-no-static (lambda (v) (null? (cdr v))))
+(define has-parent-no-static (lambda (v) (list? (cadr v))))
+(define no-parent-has-static (lambda (v) (null? (cddr v))))
+(define class-env car)
+(define get-parent-no-static cadr)
+(define get-parent-has-static caddr)
 
 ; Mstate-while handles while loops
 ; TODO: check that continue actually works
