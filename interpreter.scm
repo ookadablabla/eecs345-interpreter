@@ -220,10 +220,10 @@
 (define get-class-env
   (lambda (class-name env)
     (cond
-      ((no-parent-no-static (lookup class-name env)) (class-env (lookup class-name env)))
+      ((no-parent-no-static (lookup class-name env)) (cons (class-env (lookup class-name env)) env))
       ((has-parent-no-static (lookup class-name env)) (cons (class-env (lookup class-name env)) (get-class-env (get-parent-no-static (lookup class-name env)) env)))
-      ((no-parent-has-static (lookup class-name env)) (class-env (lookup class-name env) env))
-      (else (cons (class-env (lookup class-name env) (get-class-env (get-parent-has-static (lookup class-name env)))) env)))))
+      ((no-parent-has-static (lookup class-name env)) (cons (class-env (lookup class-name env)) env))
+      (else (cons (class-env (lookup class-name env)) (get-class-env (get-parent-has-static (lookup class-name env)) env))))))
 
 (define no-parent-no-static (lambda (v) (null? (cadr v))))
 (define has-parent-no-static (lambda (v) (not (list? (cadr v)))))
