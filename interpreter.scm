@@ -97,8 +97,21 @@
 ; Mstate-assignment handles variable assignment
 (define Mstate-assignment
   (lambda (statement env r b c t)
-    (replace_var (variable statement) (Mvalue (operation statement) env r b c t) env)))
+    (cond
+      ((list? (variable statement)) (Mstate-assignment-dot statement env r b c t))
+      (else (replace_var (variable statement) (Mvalue (operation statement) env r b c t) env)))))
 
+(define Mstate-assignment-dot
+  (lambda (statement env r b c t)
+    (cond
+      ((eq? (assignment-dot-env statement) 'this) (replace_var (assignment-dot-var statement) (Mvalue (assignment-dot-value statement) env r b c t) (getInnerScope env)))
+      ((eq? (assignment-dot-env statement) 'super) (replace_var (assignment-dot-var statement) (Mvalue (assignment-dot-value statement) env r b c t) (getInnerScope (getInnerScope env))))
+      (else (replace_var (assignment-dot-var statement) (Mvalue (assignment-dot-value statement) env r b c t) (lookup (assignment-dot-env statement)))))))
+
+(define assignment-dot-env cadadr)
+(define assignment-dot-var (lambda (v) (caddr (cadr v))))
+(define assignment-dot-value caddr)
+  
 ; Whenever entering a block of code with curly braces, this function should be called to evaluate
 ; the contents of the block inside a new layer of scope.
 ; Statement format:
@@ -294,9 +307,10 @@
 (define Mvalue-funcall
   (lambda (statement env return break continue throw)
     (cond
-      ((eq? (operand1 statement) 'this) (Mvalue-funcall-with-env (append (cons 'funcall (cons (function-call statement) '())) (params-of-funcall statement)) env return break continue throw))
-      ((eq? (operand1 statement) 'super) (Mvalue-funcall-with-env (append (cons 'funcall (cons (funtion-call statement) '())) (params-of-funcall statement)) (getInnerScope env) return break continue throw))
+      ((eq? (class-type-of-function statement) 'this) (Mvalue-funcall-with-env (append (cons 'funcall (cons (function-call statement) '())) (params-of-funcall statement)) env return break continue throw))
+      ((eq? (class-type-of-function statement) 'super) (Mvalue-funcall-with-env (append (cons 'funcall (cons (function-call statement) '())) (params-of-funcall statement)) (getInnerScope env) return break continue throw))
       (else (Mvalue-funcall-with-env (append (cons 'funcall (cons (function-call statement) '())) (params-of-funcall statement)) (lookup (class-type-of-function statement) env) return break continue throw)))))
+
 
 (define function-call (lambda (v) (car (cddadr v))))
 (define params-of-funcall cddr)
