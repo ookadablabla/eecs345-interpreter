@@ -3,7 +3,7 @@
 ;
 ; This code was restructured using solution2.scm from Blackboard to better abstract certain
 ; functions and generally clean up Mstate.
-(load "functionParser.scm")
+(load "classParser.scm")
 
 ; Interpret a file containing Java-like code.
 ;
@@ -41,7 +41,7 @@
                     (Mstate (firstExpression statement) state return break continue throw)
                     return break continue throw))))
 
-(define initial-env '((() ())))
+(define initial-env '(((true false) (true false))))
 (define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
 (define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
 (define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
@@ -178,26 +178,8 @@
   (lambda (statement env r b c t)
     (cond
       ;((stateContains (variable statement) env) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
-      ((reserved? (variable statement)) (error 'reserved "Variable name ~a is a reserved keyword in the language"))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined env))
       (else (insert (variable statement) (Mvalue (operation statement) env r b c t) env)))))
-
-; Check if a string is a reserved keyword in our language. Examples of reserved keywords
-; include true and false. Returns #t if the name is reserved.
-(define reserved?
-  (lambda (name)
-    (reserved?-recursive name reserved-list)))
-
-; Recursively check the list of reserved keywords. If the given name matches anything in the
-; list, return #t.
-(define reserved?-recursive
-  (lambda (name list)
-    (cond
-      ((null? list) #f)
-      ((eq? name (car list)) #t)
-      (else (reserved?-recursive name (cdr list))))))
-
-(define reserved-list '(true false))
 
 ; Mstate-while handles while loops
 ; TODO: check that continue actually works
