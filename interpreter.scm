@@ -3,7 +3,8 @@
 ;
 ; This code was restructured using solution2.scm from Blackboard to better abstract certain
 ; functions and generally clean up Mstate.
-(load "classParser.scm")
+(load "functionParser.scm")
+(load "state.scm")
 
 ; Interpret a file containing Java-like code.
 ;
@@ -41,10 +42,13 @@
                     (Mstate (firstExpression statement) state return break continue throw)
                     return break continue throw))))
 
-(define initial-env '(((true false) (true false))))
+(define initial-env '((() ())))
 (define default-break (lambda (s) (error 'invalidBreak "Break was called outside of a while loop")))
 (define default-continue (lambda (s) (error 'invalidContinue "Continue was called outside of a while loop")))
 (define default-throw (lambda (e s) (error 'uncaughtException "An exception was thrown but not caught")))
+
+;the rest of the expressions in the programs
+(define restOfExpressions cdr)
 
 ; Mstate modifies the state depending on the contents of statement, then returns the state..
 ; TODO: Move while's continuation to Mstate-while
@@ -109,7 +113,7 @@
 (define Mstate-func
   (lambda (statement env)
     (cond
-      ((stateContains (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
+      ((state-contains? (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) env)))))
 
 ;helper methods for Mstate-func
@@ -177,9 +181,12 @@
 (define Mstate-var
   (lambda (statement env r b c t)
     (cond
-      ;((stateContains (variable statement) env) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
+      ;((state-contains? (variable statement) env) (error 'redefining (format "Variable ~a has already been declared" (variable statement))))
       ((null? (thirdElement statement)) (insert (variable statement) 'undefined env))
       (else (insert (variable statement) (Mvalue (operation statement) env r b c t) env)))))
+
+;third element
+(define thirdElement cddr)
 
 ; Mstate-while handles while loops
 ; TODO: check that continue actually works
@@ -336,137 +343,18 @@
 
 (define comparator car)
 
-; HELPER METHODS
-
-(define lookup
-  (lambda (var state)
-    (cond
-      ((null? state) (error 'unknown (format "Symbol ~a does not exist" var)))
-      ((env-contains-symbol? var (variables state)) (lookupVal var (currentLayer state)))
-      (else (lookup var (nextLayers state))))))
-
-(define lookupVal
-  (lambda (var state)
-    (cond
-      ((eq? (variable1 state) var) (unbox (valueOfVar1 state)))
-      (else (lookupVal var (cons (restOfVars state) (cons (restOfValues state) '())))))))
-
-
-;helpers for lookup
-(define nextLayers cdr)
-
-(define currentLayer car)
-
-(define variableList caar)
-
-; remove removes a variable from the state
-; it takes the variable name and the state and removes it from the state
-(define replace_var
-  (lambda (var value state)
-    (cond
-      ((null? state) (error 'out-of-scope (format "Symbol ~a is out of scope or does not exist" var)))
-      ((env-contains-symbol? var (variables state)) (cons (get_replaced var value (currentLayer state)) (nextLayers state)))
-      (else (cons (currentLayer state) (replace_var var value (nextLayers state)))))))
-
-(define get_replaced
-  (lambda (var value state)
-    (cond
-      ((eq? (variable1 state) var) (cons (cons var (restOfVars state)) (cons (cons (begin (set-box! (valueOfVar1 state) value) (valueOfVar1 state)) (restOfValues state)) '())))
-      (else (currentLayer (insert (variable1 state) (unbox (valueOfVar1 state)) (cons (get_replaced var value (cons (restOfVars state) (cons (restOfValues state) '()))) '())))))))
-
-;insert inerts a variable into the state, if the value already exists it replaces it
-;returns the state with a given variable and value added in
-(define insert
-  (lambda (var value state)
-    (cons (cons (cons var (variables state)) (cons (cons (box value) (valuesInState state)) '())) (cdr state))))
-
 ;createClosure creates a closure functon that will be added to the state
 ;the thirsd part of the cosure is the framework for the environment
 (define createClosure
   (lambda (params body)
     (cons params (cons body (cons getFunctionExecutionEnvironment '())))))
 
-;stateContains? checks if the variable has already been declared in the state
-(define stateContains
-  (lambda (var state)
-    (cond
-      ((null? state) #f)
-      ((env-contains-symbol? var (variables state)) #t)
-      (else (stateContains var (nextLayers state))))))
-
-(define env-contains-symbol?
-  (lambda (var varList)
-    (cond
-     ((null? varList) #f)
-     ((eq? var (var1 varList)) #t)
-     (else (env-contains-symbol? var (cdr varList))))))
-
-;helper for state contains
-(define var1 car)
-
-(define resOfVariablesInState cdr)
-
-;adds a level of scope to the given state
-(define addLevelOfScope
-  (lambda (state)
-    (cons '(()()) state)))
-
-;remove the outer most level of scope
-(define getInnerScope cdr)
-
-;gets the code inside the braces
-(define insideBraces cdr)
-
 ;variables in the state
 (define variables caar)
-
-;values in the state
-(define valuesInState cadar)
-
-;outerLevelVariables gets the variables in the outer most scope
-(define outerLevelVariables caar)
-
-;outerLevelValues gets the values in the outer most scope
-(define outerLevelValues cadar)
-
-;secondLevelVariables gets the variables in the outer most scope
-(define secondLevelVariables caadr)
-
-;secondLevelValues gets the values in the outer most scope
-(define secondLevelValues cadadr)
-
-;gets the first variable in the state
-(define variable1 caar)
-
-;gets the value associated with the first variable in the state
-(define valueOfVar1 caadr)
-
-;rest of the variables in the state
-(define restOfVars cdar)
-
-;rest of the values in the state
-(define restOfValues cdadr)
-
-;get the values in the state
-(define allValues cadar)
 
 ;the expression in the stat of the program
 (define firstExpression car)
 
-;the rest of the expressions in the programs
-(define restOfExpressions cdr)
-
-;action
-(define action caar)
-
-;the expression being returned
-(define expression cdar)
-
-;variable
 (define variable cadr)
 
-;third element
-(define thirdElement cddr)
-
-;operation
 (define operation caddr)
