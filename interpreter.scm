@@ -116,6 +116,12 @@
       ((state-contains? (funcName statement) env) (error 'redefining (format "function ~a has already been declared" (funcName statement))))
       (else (insert (funcName statement) (createClosure (getParams statement) (getBody statement)) env)))))
 
+; Create a function closure, comprised of a function's formal parameters,
+; body, and a function to generate its execution environment.
+(define createClosure
+  (lambda (params body)
+    (cons params (cons body (cons getFunctionExecutionEnvironment '())))))
+
 ;helper methods for Mstate-func
 (define funcName cadr)
 (define getParams caddr)
@@ -343,16 +349,10 @@
 
 (define comparator car)
 
-;createClosure creates a closure functon that will be added to the state
-;the thirsd part of the cosure is the framework for the environment
-(define createClosure
-  (lambda (params body)
-    (cons params (cons body (cons getFunctionExecutionEnvironment '())))))
-
 ;variables in the state
 (define variables caar)
 
-;the expression in the stat of the program
+;the expression in the start of the program
 (define firstExpression car)
 
 (define variable cadr)
