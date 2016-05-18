@@ -1,2 +1,4 @@
 *.scm~
 test.txt
+*.sublime-project
+*.sublime-workspace

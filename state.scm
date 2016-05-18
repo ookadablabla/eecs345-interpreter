@@ -44,7 +44,6 @@
   (lambda (var value state)
     (cons (cons (cons var (variables state)) (cons (cons (box value) (valuesInState state)) '())) (cdr state))))
 
-
 ;state-contains? checks if the variable has already been declared in the state
 (define state-contains?
   (lambda (var state)

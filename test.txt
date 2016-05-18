@@ -1,1 +1,8 @@
-var z = x = y = 10;
+
+function main() {
+  var x = 10;
+  var y = 20;
+  var z = x = y = 10;
+
+  return x + y + z;
+}

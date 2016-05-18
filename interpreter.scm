@@ -232,6 +232,7 @@
       ((eq? (operator statement) '*) (* (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '/) (quotient (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
       ((eq? (operator statement) '%) (remainder (Mvalue (operand1 statement) env r b c t) (Mvalue (operand2 statement) env r b c t)))
+      ((eq? (operator statement) '=) (Mvalue-assignment statement env r b c t))
       ((eq? (operator statement) 'funcall) (Mvalue-funcall statement env r b c t))
       (else (Mbool statement env r b c t)))))
 
@@ -239,6 +240,10 @@
 (define operand1 cadr)
 (define operand2 caddr)
 (define operand operand1) ; TODO: Can this be moved / replaced?
+
+(define Mvalue-assignment
+  (lambda (statement env r b c t)
+    (lookup (operand1 statement) (replace_var (operand1 statement) (Mvalue (operand2 statement) env r b c t) env))))
 
 ; When a function is called, Mvalue-funcall does the following:
 ; 1. Creates the function's execution environment using the environment function stored
@@ -312,8 +317,8 @@
     (cond
       ; If we've reached the end of the formal or actual param list but not the other, the
       ; function was not called with the correct number of parameters and we throw an error.
-      ((and (null? formalParams) (not (null? actualParams))) (error 'methodSignature (format "too many parameters")))
-      ((and (not (null? formalParams)) (null? actualParams)) (error 'methodSignature (format "too few parameters")))
+      ((and (null? formalParams) (not (null? actualParams))) (error 'parameter-mismatch (format "too many parameters")))
+      ((and (not (null? formalParams)) (null? actualParams)) (error 'parameter-mismatch (format "too few parameters")))
       ((null? formalParams) localEnv)
       (else (bindActualToFormal (restOfParams formalParams)
                                 (restOfParamValues actualParams)
