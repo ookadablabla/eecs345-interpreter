@@ -241,6 +241,9 @@
 (define operand2 caddr)
 (define operand operand1) ; TODO: Can this be moved / replaced?
 
+; Perform a variable assignment, then return the value of the variable.
+; Could've been written with a (begin) but I opted to be functional over
+; performant.
 (define Mvalue-assignment
   (lambda (statement env r b c t)
     (lookup (operand1 statement) (replace_var (operand1 statement) (Mvalue (operand2 statement) env r b c t) env))))

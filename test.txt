@@ -1,8 +1,8 @@
-
 function main() {
-  var x = 10;
-  var y = 20;
-  var z = x = y = 10;
-
-  return x + y + z;
-}
+  var a = 31160;
+var b = 1476;
+var r = a % b;
+while (r != 0)
+  r = (a = b) % (b = r);
+return b;
+return x;}
